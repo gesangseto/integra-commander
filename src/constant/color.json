@@ -1,0 +1,14 @@
+{
+  "primary": "#0d1fa6",
+  "secondary": "#8a8a8a",
+  "success": "#4dc000",
+  "warning": "#fcb500",
+  "danger": "#ed6e13",
+  "textLight": "#ffffff",
+  "textDark": "#000000",
+  "inherit": "#c7c7c7",
+  "blue": "#0300cc",
+  "blueLight": "#28bbfa",
+  "green": "#009c24",
+  "greenLight": "#08c935"
+}
