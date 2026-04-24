@@ -50,7 +50,7 @@ export const AlertProvider = ({ children }) => {
         open={alert.open}
         autoHideDuration={3000}
         onClose={handleClose}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
         <Alert severity={alert.severity} variant="filled" onClose={handleClose}>
           {alert.message}

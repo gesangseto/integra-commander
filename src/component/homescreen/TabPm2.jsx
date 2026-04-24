@@ -1,44 +1,46 @@
-import React, { useState, useEffect } from 'react';
 import {
+  Add,
+  Delete,
+  Edit,
+  FolderOpen,
+  MonitorHeart,
+  Refresh,
+  RocketLaunch,
+  Settings,
+  Stop,
+  Visibility,
+} from '@mui/icons-material';
+import {
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  Grid,
+  IconButton,
   Paper,
-  Typography,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Button,
-  Box,
   TextField,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Chip,
-  IconButton,
   Tooltip,
-  Grid,
-  Divider,
+  Typography,
 } from '@mui/material';
-import {
-  Stop,
-  Refresh,
-  Delete,
-  Settings,
-  Add,
-  FolderOpen,
-  Edit,
-  Visibility,
-  MonitorHeart,
-} from '@mui/icons-material';
-
+import { useEffect, useState } from 'react';
 // Import API Plugin Tauri v2
-import { Command } from '@tauri-apps/plugin-shell';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
+import { Command } from '@tauri-apps/plugin-shell';
+import { useAlert } from '../AlertProvider';
 
 export default function TabPm2() {
+  const { showAlert } = useAlert();
   // ================= STATE MANAGEMENT =================
   const [pm2List, setPm2List] = useState([]);
 
@@ -46,7 +48,6 @@ export default function TabPm2() {
   const [openPm2Form, setOpenPm2Form] = useState(false);
   const [openEnvDialog, setOpenEnvDialog] = useState(false);
   const [openDetailDialog, setOpenDetailDialog] = useState(false);
-  const [openLogDialog, setOpenLogDialog] = useState(false);
 
   // Form and Data State
   const [isEditMode, setIsEditMode] = useState(false);
@@ -55,7 +56,30 @@ export default function TabPm2() {
   const [currentEnvPath, setCurrentEnvPath] = useState('');
   const [activeAppName, setActiveAppName] = useState('');
   const [selectedProcess, setSelectedProcess] = useState(null);
-  const [logContent, setLogContent] = useState('');
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      initPm2();
+    }, 5000); // Tunggu 5 detik setelah mount baru panggil resurrect
+    return () => clearTimeout(timeout);
+  }, []);
+
+  const initPm2 = async () => {
+    try {
+      // Pisahkan setiap argumen ke dalam array
+      let bangunin = Command.create('run-command', ['/C', 'pm2', 'resurrect']);
+      const output = await bangunin.execute();
+      fetchPm2List();
+    } catch (error) {
+      showAlert(`${error}`, 'error');
+    }
+  };
+
+  useEffect(() => {
+    fetchPm2List();
+    const interval = setInterval(fetchPm2List, 10000); // Auto-refresh data setiap 10 detik
+    return () => clearInterval(interval);
+  }, []);
 
   // ================= FETCH DATA PM2 =================
   const fetchPm2List = async () => {
@@ -66,15 +90,9 @@ export default function TabPm2() {
         setPm2List(JSON.parse(output.stdout));
       }
     } catch (error) {
-      console.error('Gagal mengambil list PM2:', error);
+      showAlert(`Error saat fetching pm2: ${error}`, 'error');
     }
   };
-
-  useEffect(() => {
-    fetchPm2List();
-    const interval = setInterval(fetchPm2List, 5000); // Auto-refresh data setiap 5 detik
-    return () => clearInterval(interval);
-  }, []);
 
   // ================= PM2 ACTIONS =================
 
@@ -102,8 +120,13 @@ export default function TabPm2() {
         });
       }
     } catch (error) {
-      console.error('Gagal membuka file picker:', error);
+      showAlert(`${error}`, 'error');
     }
+  };
+
+  const syncPm2Session = async () => {
+    // Jalankan di background tanpa mengganggu UI
+    await Command.create('run-command', ['/C', 'pm2', 'save']).execute();
   };
 
   // Fungsi simpan penambahan dan pengeditan app
@@ -111,6 +134,7 @@ export default function TabPm2() {
     if (!pm2Form.path || !pm2Form.name) return alert('Data wajib diisi!');
     try {
       if (isEditMode) {
+        // Delete yang lama
         await Command.create('run-command', [
           '/C',
           'pm2',
@@ -118,6 +142,12 @@ export default function TabPm2() {
           pm2Form.id,
         ]).execute();
       }
+      // Bentuk app yang baru
+      const lastSlash = Math.max(
+        pm2Form.path.lastIndexOf('\\'),
+        pm2Form.path.lastIndexOf('/'),
+      );
+      const folderPath = pm2Form.path.substring(0, lastSlash);
       await Command.create('run-command', [
         '/C',
         'pm2',
@@ -125,12 +155,15 @@ export default function TabPm2() {
         pm2Form.path,
         '--name',
         pm2Form.name,
+        '--cwd', // <--- Set Current Working Directory
+        folderPath,
       ]).execute();
       setOpenPm2Form(false);
       setPm2Form({ name: '', path: '', id: null });
       fetchPm2List();
+      await syncPm2Session(); // <--- Sinkronisasi otomatis
     } catch (error) {
-      console.error('Aksi PM2 Gagal:', error);
+      showAlert(`${error}`, 'error');
     }
   };
 
@@ -143,9 +176,10 @@ export default function TabPm2() {
         action,
         identifier,
       ]).execute();
+      syncPm2Session();
       fetchPm2List();
     } catch (error) {
-      console.error(`Gagal melakukan ${action} pada PM2:`, error);
+      showAlert(`${error}`, 'error');
     }
   };
   // FITUR: Buka PM2 Monit di Jendela CMD Terpisah
@@ -160,7 +194,7 @@ export default function TabPm2() {
         `pm2 monit ${procId}`,
       ]).execute();
     } catch (error) {
-      alert('Gagal membuka monitor eksternal.');
+      showAlert(`${error}`, 'error');
     }
   };
   // ================= .ENV EDIT LOGIC =================
@@ -181,8 +215,7 @@ export default function TabPm2() {
       setEnvContent(content);
       setOpenEnvDialog(true);
     } catch (error) {
-      alert(`File .env tidak ditemukan di direktori target!`);
-      console.error(error);
+      showAlert(`${error}`, 'error');
     }
   };
 
@@ -198,11 +231,11 @@ export default function TabPm2() {
         activeAppName,
         '--update-env',
       ]).execute();
+      syncPm2Session();
       fetchPm2List();
-      alert('File .env berhasil diperbarui!');
+      showAlert(`Berhasil merubah file.`, 'success');
     } catch (error) {
-      alert('Gagal menyimpan file .env!');
-      console.error(error);
+      showAlert(`${error}`, 'error');
     }
   };
 
@@ -212,34 +245,6 @@ export default function TabPm2() {
     setOpenDetailDialog(true);
   };
 
-  const handleOpenLog = async (name) => {
-    setActiveAppName(name);
-    setOpenLogDialog(true);
-    setLogContent('Sedang mengambil log dari PM2...');
-
-    try {
-      // Menggunakan --nostream agar Tauri tidak menahan beban background process terminal
-      const command = Command.create('run-command', [
-        '/C',
-        'pm2',
-        'logs',
-        name,
-        '--lines',
-        '100',
-        '--nostream',
-      ]);
-      const output = await command.execute();
-      const result = output.stdout || output.stderr;
-
-      if (result.trim() === '') {
-        setLogContent('Belum ada logs tercetak untuk aplikasi ini.');
-      } else {
-        setLogContent(result);
-      }
-    } catch (error) {
-      setLogContent(`Gagal mengambil logs. Error: ${error.message}`);
-    }
-  };
   const handleOpenLocation = async (fullPath) => {
     try {
       const lastSlash = Math.max(
@@ -254,7 +259,7 @@ export default function TabPm2() {
         directory,
       ]).execute();
     } catch (error) {
-      alert('Gagal membuka lokasi folder.');
+      showAlert(`${error}`, 'error');
     }
   };
   // Menghitung string durasi online proses
@@ -288,7 +293,6 @@ export default function TabPm2() {
           Tambah App
         </Button>
       </Box>
-
       {/* TABEL UTAMA PM2 */}
       <TableContainer component={Paper} variant="outlined">
         <Table>
@@ -412,7 +416,6 @@ export default function TabPm2() {
           </TableBody>
         </Table>
       </TableContainer>
-
       {/* 1. DIALOG FORM TAMBAH/EDIT PM2 */}
       <Dialog
         open={openPm2Form}
@@ -460,7 +463,6 @@ export default function TabPm2() {
           </Button>
         </DialogActions>
       </Dialog>
-
       {/* 2. DIALOG EDIT .ENV */}
       <Dialog
         open={openEnvDialog}
@@ -498,7 +500,6 @@ export default function TabPm2() {
           </Button>
         </DialogActions>
       </Dialog>
-
       {/* 3. DIALOG VIEW DETAIL PM2 */}
       <Dialog
         open={openDetailDialog}

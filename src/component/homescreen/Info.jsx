@@ -1,13 +1,7 @@
-import {
-  Box,
-  Container,
-  LinearProgress,
-  Paper,
-  Typography,
-} from '@mui/material';
-import { invoke } from '@tauri-apps/api/core';
+import { Box, LinearProgress, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 
+import { listen } from '@tauri-apps/api/event';
 export default function Info() {
   const [data, setData] = useState({
     cpu: 0,
@@ -15,19 +9,16 @@ export default function Info() {
     storage: 0,
   });
 
+  // Di dalam komponen React Anda
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await invoke('get_system_stats');
-        setData(res);
-      } catch (err) {
-        console.error('Fetch stats error:', err);
-      }
-    };
+    const unlisten = listen('sys-stats', (event) => {
+      const data = event.payload;
+      setData(data);
+    });
 
-    fetchData(); // Panggil segera saat mount
-    const timer = setInterval(fetchData, 2000); // Gunakan 2 detik agar lebih responsif
-    return () => clearInterval(timer);
+    return () => {
+      unlisten.then((f) => f()); // Cleanup saat komponen unmount
+    };
   }, []);
 
   // ================= VIEW LAYOUT =================
@@ -57,7 +48,7 @@ export default function Info() {
           color="#ff00ff"
         />
         <ResourceItem
-          label="Disk Storage"
+          label="System Disk Storage"
           value={data.storage}
           color="#ff9100"
         />
