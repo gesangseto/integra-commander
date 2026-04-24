@@ -4,7 +4,7 @@ import { Command } from '@tauri-apps/plugin-shell';
 import { useEffect } from 'react';
 import mertrackLogo from '../../assets/mertrack.png';
 import '../../css/layout/Header.css';
-import { versionStore } from '../../store/versionStore';
+import { useAppStore } from '../../store/pathStore';
 
 const blinkRed = keyframes`
   0% { background-color: #ff8383; }
@@ -18,42 +18,49 @@ const blinkGreen = keyframes`
 `;
 
 function Header() {
-  const versionNginx = versionStore((state) => state.nginx);
-  const versionNpm = versionStore((state) => state.npm);
-  const versionPm2 = versionStore((state) => state.pm2);
-  const versionNode = versionStore((state) => state.node);
-  const setNginx = versionStore((state) => state.setNginx);
-  const setPm2 = versionStore((state) => state.setPm2);
-  const setNpm = versionStore((state) => state.setNpm);
-  const setNode = versionStore((state) => state.setNode);
-
+  const store = useAppStore();
   useEffect(() => {
-    async function fetchNginx() {
-      let nginx = Command.create('run-command', ['/C', 'nginx', '-v']);
-      nginx = await nginx.execute();
-      if (nginx.stdout) setNginx(nginx.stdout);
-      else setNginx(nginx.stderr);
-    }
-    async function fetchPm2() {
-      let pm2 = Command.create('run-command', ['/C', 'pm2', '-v']);
-      pm2 = await pm2.execute();
-      setPm2(pm2.stdout);
-    }
-    async function fetchNode() {
-      let node = Command.create('run-command', ['/C', 'node', '-v']);
-      node = await node.execute();
-      setNode(node.stdout);
-    }
-    async function fetchNpm() {
-      let npm = Command.create('run-command', ['/C', 'npm', '-v']);
-      npm = await npm.execute();
-      setNpm(npm.stdout);
-    }
-    if (!versionNginx) fetchNginx();
-    if (!versionPm2) fetchPm2();
-    if (!versionNode) fetchNode();
-    if (!versionNpm) fetchNpm();
-  }, []);
+    const fetchAll = async () => {
+      // 1. Fetch Nginx menggunakan path dari store
+      const nginxOut = await Command.create('run-command', [
+        '/C',
+        'nginx',
+        '-p',
+        store.nginxPath,
+        '-v',
+      ]).execute();
+      const nv = (nginxOut.stdout || nginxOut.stderr || '')
+        .replace('nginx version: ', '')
+        .trim();
+
+      // 2. Fetch yang lain
+      const pm2Out = await Command.create('run-command', [
+        '/C',
+        'pm2',
+        '-v',
+      ]).execute();
+      const nodeOut = await Command.create('run-command', [
+        '/C',
+        'node',
+        '-v',
+      ]).execute();
+      const npmOut = await Command.create('run-command', [
+        '/C',
+        'npm',
+        '-v',
+      ]).execute();
+
+      // Update sekaligus ke Store
+      store.setVersions({
+        nginx: nv || 'Error',
+        pm2: pm2Out.stdout.trim() || 'Error',
+        node: nodeOut.stdout.trim() || 'Error',
+        npm: npmOut.stdout.trim() || 'Error',
+      });
+    };
+
+    fetchAll();
+  }, [store.nginxPath]); // Auto-refresh jika user merubah folder Nginx
 
   return (
     <Paper sx={{ borderRadius: 2 }}>
@@ -83,10 +90,10 @@ function Header() {
                   fontWeight: 'bold',
                   fontSize: '1.2rem',
                   // Tambahkan animasi kedap-kedip yang tadi jika mau
-                  animation: `${versionNginx ? blinkGreen : blinkRed} 1s infinite ease-in-out`,
+                  animation: `${store.nginxVersion} ? ${blinkGreen} : ${blinkRed} 1s infinite ease-in-out`,
                 }}
               >
-                Website {versionNginx ? 'Active' : 'Inactive'}
+                Website {store.nginxVersion ? 'Active' : 'Inactive'}
               </Box>
             </Box>
             {/* DEVICE INFO */}
@@ -112,27 +119,27 @@ function Header() {
                 >
                   <Circle
                     fontSize="small"
-                    color={versionNode ? 'success' : 'error'}
+                    color={store.nodeVersion ? 'success' : 'error'}
                   />
-                  node {versionNode}
+                  node {store.nodeVersion}
                 </span>
                 <span
                   style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
                   <Circle
                     fontSize="small"
-                    color={versionNpm ? 'success' : 'error'}
+                    color={store.npmVersion ? 'success' : 'error'}
                   />
-                  npm {versionNpm}
+                  npm {store.npmVersion}
                 </span>
                 <span
                   style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
                   <Circle
                     fontSize="small"
-                    color={versionPm2 ? 'success' : 'error'}
+                    color={store.pm2Version ? 'success' : 'error'}
                   />
-                  pm2 {versionPm2}
+                  pm2 {store.pm2Version}
                 </span>
               </Box>
             </Box>

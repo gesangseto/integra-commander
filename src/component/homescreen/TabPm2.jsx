@@ -38,6 +38,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
 import { useAlert } from '../AlertProvider';
+import { openLocation } from '../../utility';
 
 export default function TabPm2() {
   const { showAlert } = useAlert();
@@ -126,7 +127,12 @@ export default function TabPm2() {
 
   const syncPm2Session = async () => {
     // Jalankan di background tanpa mengganggu UI
-    await Command.create('run-command', ['/C', 'pm2', 'save']).execute();
+    await Command.create('run-command', [
+      '/C',
+      'pm2',
+      'save',
+      '--force',
+    ]).execute();
   };
 
   // Fungsi simpan penambahan dan pengeditan app
@@ -176,6 +182,9 @@ export default function TabPm2() {
         action,
         identifier,
       ]).execute();
+
+      // Berikan jeda 500ms agar PM2 menyelesaikan operasi I/O
+      await new Promise((r) => setTimeout(r, 500));
       syncPm2Session();
       fetchPm2List();
     } catch (error) {
@@ -245,22 +254,8 @@ export default function TabPm2() {
     setOpenDetailDialog(true);
   };
 
-  const handleOpenLocation = async (fullPath) => {
-    try {
-      const lastSlash = Math.max(
-        fullPath.lastIndexOf('\\'),
-        fullPath.lastIndexOf('/'),
-      );
-      const directory = fullPath.substring(0, lastSlash);
-      // Membuka Windows Explorer pada folder spesifik
-      await Command.create('run-command', [
-        '/C',
-        'explorer',
-        directory,
-      ]).execute();
-    } catch (error) {
-      showAlert(`${error}`, 'error');
-    }
+  const handleOpenLocation = (fullPath) => {
+    openLocation(fullPath, (err) => showAlert(err, 'error'));
   };
   // Menghitung string durasi online proses
   const formatUptime = (timestamp) => {
@@ -281,7 +276,9 @@ export default function TabPm2() {
   return (
     <Box mt={2}>
       <Box display="flex" justifyContent="space-between" mb={2}>
-        <Typography variant="h6">Daftar Aplikasi PM2</Typography>
+        <Typography variant="h6" fontWeight="bold">
+          PM2 Management
+        </Typography>
         <Button
           variant="contained"
           startIcon={<Add />}

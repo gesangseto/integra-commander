@@ -38,8 +38,8 @@ export default function Home() {
         onChange={handleTabChange}
         sx={{ borderBottom: 1, borderColor: 'divider' }}
       >
-        <Tab label="PM2 Dashboard" />
-        <Tab label="Nginx Configs" />
+        <Tab label="PM2" />
+        <Tab label="Nginx" />
       </Tabs>
 
       {/* Konten sesuai tab yang aktif */}

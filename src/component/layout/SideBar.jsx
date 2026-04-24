@@ -7,6 +7,7 @@ import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useNavigate } from 'react-router-dom';
 import { useConfirm } from '../ConfirmProvider';
+import { SpaceDashboard } from '@mui/icons-material';
 
 export default function SideBar() {
   const navigate = useNavigate();
@@ -78,16 +79,16 @@ export default function SideBar() {
       {/* BUTTON GROUP */}
       <Stack spacing={1}>
         <Button sx={sxButton()} onClick={() => navigate('/')}>
-          <WindowOutlinedIcon fontSize="large" />
+          <SpaceDashboard fontSize="large" />
         </Button>
       </Stack>
 
       <Divider sx={{ bgcolor: '#555' }} />
 
       <Stack spacing={1} mt="auto">
-        <Button sx={sxButton()} onClick={() => navigate('/setting')}>
+        {/* <Button sx={sxButton()} onClick={() => navigate('/setting')}>
           <SettingsIcon fontSize="large" />
-        </Button>
+        </Button> */}
         <Button
           sx={{ ...sxButton(), backgroundColor: 'red' }}
           onClick={async () => {
