@@ -276,7 +276,7 @@ export default function TabPm2() {
   return (
     <Box mt={2}>
       <Box display="flex" justifyContent="space-between" mb={2}>
-        <Typography variant="h6" fontWeight="bold">
+        <Typography variant="h6" fontWeight="bold" color="primary.main">
           PM2 Management
         </Typography>
         <Button

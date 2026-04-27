@@ -75,27 +75,6 @@ function Header() {
                 loading="lazy"
               />
             </Box>
-            {/* PRODUCTION INFO */}
-            <Box flex={1} alignContent={'center'} mx={5}>
-              <Box
-                sx={{
-                  width: 450,
-                  height: 60,
-                  borderRadius: 3,
-                  // Properti untuk mengetengahkan teks:
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  color: 'white',
-                  fontWeight: 'bold',
-                  fontSize: '1.2rem',
-                  // Tambahkan animasi kedap-kedip yang tadi jika mau
-                  animation: `${store.nginxVersion} ? ${blinkGreen} : ${blinkRed} 1s infinite ease-in-out`,
-                }}
-              >
-                Website {store.nginxVersion ? 'Active' : 'Inactive'}
-              </Box>
-            </Box>
             {/* DEVICE INFO */}
             <Box flex={1} alignContent={'center'} mx={5}>
               <Box

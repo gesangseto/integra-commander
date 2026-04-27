@@ -2,12 +2,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use sysinfo::{System, Disks};
-use std::sync::Mutex;
 use std::{thread, time::Duration};
 use tauri::Emitter; // Dibutuhkan untuk mengirim event
 
-// Struct tetap dipertahankan jika Anda masih ingin memanggil get_system_stats secara manual
-struct SystemState(Mutex<System>);
 
 #[tauri::command]
 fn shutdown() {
@@ -25,11 +22,7 @@ fn shutdown() {
 fn main() {
     let _ = fix_path_env::fix();
     
-    // Inisialisasi awal system info
-    let sys = System::new_all();
-
     tauri::Builder::default()
-        .manage(SystemState(Mutex::new(sys)))
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())

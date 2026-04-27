@@ -1,6 +1,6 @@
 import { Box, LinearProgress, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
-
+import { Command } from '@tauri-apps/plugin-shell';
 import { listen } from '@tauri-apps/api/event';
 export default function Info() {
   const [data, setData] = useState({
@@ -15,12 +15,45 @@ export default function Info() {
       const data = event.payload;
       setData(data);
     });
-
+    fetchFullStats();
     return () => {
       unlisten.then((f) => f()); // Cleanup saat komponen unmount
     };
   }, []);
 
+  const runPostgresQuery = async (query) => {
+    try {
+      const pass = 'm3r1nD003092021';
+      const connectionString = `postgresql://postgres:${pass}@127.0.0.1:5432/postgres`;
+      const script = `psql "${connectionString}" -t -A -c "${query}"`;
+      const cmd = Command.create('run-command', ['/C', `${script}`]);
+
+      console.log('Executing:', script);
+      const output = await cmd.execute();
+      console.log(output);
+      if (output.code !== 0) {
+        console.error('Stderr Output:', output.stderr);
+        throw new Error(output.stderr);
+      }
+      return output.stdout.trim();
+    } catch (error) {
+      console.error('Postgres Error:', error);
+      return null;
+    }
+  };
+
+  const fetchFullStats = async () => {
+    const sql = `SELECT row_to_json(t) FROM (SELECT (SELECT count(*) FROM pg_stat_activity) as connections, (SELECT count(*) FROM pg_stat_activity WHERE state = 'active') as active_queries, (SELECT count(*) FROM pg_stat_activity WHERE wait_event IS NOT NULL) as blocked_queries, (SELECT pg_size_pretty(pg_database_size(current_database()))) as db_size, (SELECT round(sum(blks_hit)*100/nullif(sum(blks_hit+blks_read),0),2) FROM pg_stat_database) as cache_hit_ratio, (SELECT sum(xact_commit) FROM pg_stat_database) as total_commits, (SELECT sum(xact_rollback) FROM pg_stat_database) as total_rollbacks) t;`;
+
+    const res = await runPostgresQuery(sql);
+    console.log(res);
+
+    if (res) {
+      const data = JSON.parse(res);
+      console.log('Postgres Dashboard Data:', data);
+      // Masukkan ke state React Anda
+    }
+  };
   // ================= VIEW LAYOUT =================
   return (
     <Box
