@@ -1,29 +1,24 @@
 import { useEffect, useState } from 'react';
 
 import {
-  Add,
   Delete,
-  Edit,
-  ElectricalServices,
   Folder,
   FolderOpen,
   PlayArrow,
-  PlayArrowOutlined,
   Refresh,
   RocketLaunch,
   Stop,
-  StopCircleTwoTone,
-  StopOutlined,
-  Storage,
 } from '@mui/icons-material';
 import {
   Box,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
+  Grid,
   IconButton,
   Paper,
   Table,
@@ -42,25 +37,47 @@ import { open } from '@tauri-apps/plugin-dialog';
 import {
   exists,
   mkdir,
+  readDir,
   readTextFile,
   remove,
   writeTextFile,
-  readDir,
 } from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
 import { useAppStore } from '../../store/pathStore'; // Sesuaikan path file store Anda
 import { openLocation } from '../../utility';
 import { useAlert } from '../AlertProvider';
+import DialogGitAuthentication from '../DialogGitAuthentication';
+import { useSettingStore } from '../../store/settingStore';
+
+const DEPLOY_APPS = [
+  {
+    key: 'frontend',
+    title: 'Install / Update Mertrack Frontned',
+    description: 'Install + nginx',
+  },
+];
+
 export default function TabNginx() {
   const { showAlert } = useAlert();
   const { nginxPath, setNginxPath } = useAppStore();
-  // Folder default tempat menyimpan file .conf (Hardcoded sesuai permintaan)
   const [NGINX_CONF_DIR, setNGINX_CONF_DIR] = useState(
     `${nginxPath}\\conf\\sites-enabled`,
   );
+  const setting = useSettingStore((state) => state.form);
+  const [gitForm, setGitForm] = useState({ username: '', password: '' });
+  const [isLoading, setIsLoading] = useState(false);
+  const [openGitDialog, setOpenGitDialog] = useState(false);
+  const [selectedDeploy, setSelectedDeploy] = useState('');
+  const [openDeployDialog, setOpenDeployDialog] = useState(false);
+  const [deployLoading, setDeployLoading] = useState('');
+  const [deployLogs, setDeployLogs] = useState([]);
+
   const [nginxList, setNginxList] = useState([]);
   const [openNginxForm, setOpenNginxForm] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+
+  const tempDir = `${setting.workingDirectory}\\integra\\temp`;
+  const serviceDir = `${setting.workingDirectory}\\integra\\public`;
 
   const [nginxForm, setNginxForm] = useState({
     id: null,
@@ -77,6 +94,33 @@ export default function TabNginx() {
       fetchNginxList();
     }
   }, [nginxPath]);
+
+  const runCommand = async (args, cwd) => {
+    appendLog(args.join(' '));
+    const cmd = Command.create('run-command', args, {
+      cwd,
+    });
+    const output = await cmd.execute();
+    if (output.stderr) {
+      appendLog(output.stderr);
+    }
+    return output;
+  };
+  const appendLog = (msg) => {
+    setDeployLogs((prev) => [
+      ...prev,
+      `[${new Date().toLocaleTimeString()}] ${msg}`,
+    ]);
+  };
+
+  // helper update/add env
+  const setEnvValue = (content, key, value) => {
+    const regex = new RegExp(`^${key}=.*$`, 'm');
+    if (regex.test(content)) {
+      return content.replace(regex, `${key}="${value}"`);
+    }
+    return `${content.trim()}\n${key}="${value}"\n`;
+  };
 
   const fetchNginxList = async () => {
     try {
@@ -113,6 +157,7 @@ export default function TabNginx() {
       console.error('Gagal sinkronisasi folder Nginx:', err);
     }
   };
+
   const handleBrowseFolder = async () => {
     try {
       const selected = await open({
@@ -164,10 +209,112 @@ export default function TabNginx() {
     openLocation(item?.rootPath, (err) => showAlert(err, 'error'));
   };
 
-  const handleSaveNginx = async () => {
-    if (!nginxForm.name || !nginxForm.domain)
-      return alert('Nama dan Domain wajib diisi!');
+  const handleDeploy = async (type) => {
+    try {
+      // Hapus folder temp
+      await runCommand(
+        ['/C', 'rmdir', '/S', '/Q', tempDir],
+        setting.workingDirectory,
+      ).catch(() => {});
+      // =====================================================
+      // START DEPLOYMENT
+      // =====================================================
+      // Menandai deploy sedang berjalan
+      setDeployLoading(type);
+      // Reset log deployment sebelumnya
+      setDeployLogs([]);
+      // Tambahkan log awal
+      appendLog('Starting deployment...');
 
+      // =====================================================
+      // MENENTUKAN NAMA SERVICE dan url git
+      // =====================================================
+      // Tentukan nama PM2 service berdasarkan type deployment
+      let serviceName = '';
+      let gitUrl = 'https://gitlab.com/mertrack/mertrack_frontend';
+
+      // =====================================================
+      // MEMBENTUK URL AUTHENTICATION GIT
+      // =====================================================
+      // Menyisipkan username + password/token
+      // agar git clone private repository bisa berjalan
+      const authUrl = gitUrl.replace(
+        'https://',
+        `https://${encodeURIComponent(gitForm.username)}:${encodeURIComponent(gitForm.password)}@`,
+      );
+      appendLog('Cloning repository...');
+      // Clone latest source code
+      await runCommand(
+        ['/C', 'git', 'clone', '--depth', '1', authUrl, tempDir],
+        setting.workingDirectory,
+      );
+      // =====================================================
+      // UPDATE FILE .ENV
+      // =====================================================
+      // Variable environment yang akan diupdate
+      let envField = {
+        VUE_APP_URL_API_MERTRACK: `http://${setting.serverIp}:${setting.backendPort}`,
+        VUE_APP_DEFAULT_DATE_FILTER: setting.rangeTransaction,
+      };
+      appendLog('Updating .env file...');
+      // Path file .env
+      const envPath = `${tempDir}\\.env`;
+      // Isi env existing
+      let currentEnv = '';
+      try {
+        // Membaca .env jika ada
+        currentEnv = await readTextFile(envPath);
+      } catch {
+        // Jika tidak ada maka buat baru
+        appendLog('.env not found, creating new file...');
+      }
+      // Loop semua envField lalu update/add ke .env
+      for (const key in envField) {
+        currentEnv = setEnvValue(currentEnv, key, envField[key] || '');
+      }
+      // Simpan hasil env terbaru
+      await writeTextFile(envPath, currentEnv);
+
+      // =====================================================
+      // INSTALL DEPENDENCIES
+      // =====================================================
+      appendLog('Installing dependencies...');
+      // npm install
+      await runCommand(['/C', 'npm', 'install'], tempDir);
+
+      // =====================================================
+      // BUILD PROJECT
+      // =====================================================
+      appendLog('Building application...');
+      // npm run build
+      await runCommand(['/C', 'npm', 'run', 'build'], tempDir);
+
+      // =====================================================
+      // COPY BUILD KE SERVICE PRODUCTION
+      // Tidak perlu copy karen hasil build otomatis menjadi ../public
+      // =====================================================
+
+      // =====================================================
+      // UPDATE NGINX ACTIVE SITES
+      // =====================================================
+      await handleSaveNginx();
+
+      // =====================================================
+      // HAPUS TEMP DIRECTORY
+      // =====================================================
+      appendLog('Cleaning temp directory...');
+      // Hapus folder temp
+      await runCommand(
+        ['/C', 'rmdir', '/S', '/Q', tempDir],
+        setting.workingDirectory,
+      );
+    } catch (err) {
+      showAlert(`${err}`, 'error');
+    } finally {
+      setDeployLoading('');
+    }
+  };
+  const handleSaveNginx = async () => {
     try {
       // 1. Pastikan folder NGINX_CONF_DIR tersedia
       // Jika folder 'sites-enabled' belum ada, kita buat secara otomatis
@@ -176,57 +323,31 @@ export default function TabNginx() {
         await mkdir(NGINX_CONF_DIR, { recursive: true });
       }
 
-      const fileName = `${nginxForm.name.toLowerCase().replace(/\s+/g, '-')}.conf`;
+      const fileName = `MERTRACK-FRONTEND.conf`;
 
       // Gunakan join path manual yang aman untuk Windows
       const fullConfPath = `${NGINX_CONF_DIR.replace(/[\\/]$/, '')}\\${fileName}`;
 
       // 2. Konfigurasi Nginx
       const configContent = `server {
-    listen ${nginxForm.port};
-    server_name ${nginxForm.domain};
-
-    root "${nginxForm.rootPath.replace(/\\/g, '/')}";
+    listen ${setting.frontendPort};
+    server_name localhost;
+    root "${serviceDir.replace(/\\/g, '/')}";
     index index.html index.htm;
-
     location / {
-        try_files $uri $uri/ @proxy;
-    }
-
-    location @proxy {
-        ${nginxForm.target ? `proxy_pass ${nginxForm.target};` : '# No proxy pass'}
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          try_files $uri /index.html;
     }
 }`;
 
       // 3. Tulis file
       await writeTextFile(fullConfPath, configContent);
 
-      // 4. Update State
-      if (isEditMode) {
-        setNginxList(
-          nginxList.map((item) =>
-            item.id === nginxForm.id ? { ...nginxForm, fileName } : item,
-          ),
-        );
-      } else {
-        setNginxList([
-          ...nginxList,
-          { ...nginxForm, id: Date.now(), fileName },
-        ]);
-      }
-
+      await fetchNginxList();
       await reloadNginx();
       setOpenNginxForm(false);
       alert('Konfigurasi berhasil disimpan!');
     } catch (err) {
-      console.error('Error Detail:', err);
-      // Menampilkan pesan error spesifik dari OS (seperti Permission Denied)
-      alert(
-        `Gagal: ${err}. \n\nPastikan aplikasi berjalan sebagai Administrator jika menulis di Drive C.`,
-      );
+      alert(`Gagal: ${err}.`);
     }
   };
 
@@ -414,26 +535,13 @@ export default function TabNginx() {
             <Button
               variant="contained"
               startIcon={<RocketLaunch />}
-              onClick={() => {
-                setIsEditMode(false);
-                setNginxForm({
-                  id: null,
-                  name: '',
-                  port: '80',
-                  domain: '',
-                  target: '',
-                  rootPath: 'C:\\nginx\\html',
-                });
-                setOpenNginxForm(true);
-              }}
-              sx={{ borderRadius: 2, px: 3 }}
+              onClick={() => setOpenDeployDialog(true)}
             >
               Tambah / Update App
             </Button>
           </Box>
         </Box>
       </Box>
-
       <TableContainer
         component={Paper}
         variant="outlined"
@@ -494,22 +602,12 @@ export default function TabNginx() {
                     >
                       <Folder />
                     </IconButton>
-                    <IconButton
-                      color="info"
-                      onClick={() => {
-                        setIsEditMode(true);
-                        setNginxForm(site);
-                        setOpenNginxForm(true);
-                      }}
-                    >
-                      <Edit />
-                    </IconButton>
-                    <IconButton
+                    {/* <IconButton
                       color="error"
                       onClick={() => handleDeleteNginx(site)}
                     >
                       <Delete />
-                    </IconButton>
+                    </IconButton> */}
                   </TableCell>
                 </TableRow>
               ))
@@ -517,104 +615,100 @@ export default function TabNginx() {
           </TableBody>
         </Table>
       </TableContainer>
-
       <Dialog
-        open={openNginxForm}
-        onClose={() => setOpenNginxForm(false)}
+        open={openDeployDialog}
+        onClose={() => setOpenDeployDialog(false)}
         fullWidth
-        maxWidth="sm"
+        maxWidth="md"
       >
-        <DialogTitle>{isEditMode ? 'Edit Host' : 'Tambah Host'}</DialogTitle>
-        <Divider />
-        <DialogContent
-          sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 3 }}
-        >
-          <TextField
-            label="Nama Config"
-            fullWidth
-            value={nginxForm.name}
-            disabled={isEditMode}
-            onChange={(e) =>
-              setNginxForm({ ...nginxForm, name: e.target.value })
-            }
-            placeholder="mertrack-api"
-          />
+        <DialogTitle>Deployment Manager</DialogTitle>
 
-          <Box display="flex" gap={2}>
-            <TextField
-              label="Domain / IP"
-              fullWidth
-              value={nginxForm.domain}
-              onChange={(e) =>
-                setNginxForm({ ...nginxForm, domain: e.target.value })
-              }
-              placeholder="localhost"
-            />
-            <TextField
-              label="Port"
-              sx={{ width: 120 }}
-              value={nginxForm.port}
-              onChange={(e) =>
-                setNginxForm({ ...nginxForm, port: e.target.value })
-              }
-            />
-          </Box>
+        <DialogContent>
+          <Grid container spacing={2}>
+            {DEPLOY_APPS.map((app) => (
+              <Grid item xs={12} md={6} key={app.key}>
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    minWidth: 375,
+                  }}
+                >
+                  <Typography variant="h6" fontWeight="bold">
+                    {app.title}
+                  </Typography>
 
-          <Box>
-            <Typography
-              variant="caption"
-              color="textSecondary"
-              fontWeight="bold"
-            >
-              ROOT DIRECTORY
-            </Typography>
-            <Box display="flex" gap={1} mt={0.5}>
-              <TextField
-                fullWidth
-                size="small"
-                value={nginxForm.rootPath}
-                InputProps={{
-                  readOnly: true,
-                  startAdornment: (
-                    <Folder sx={{ mr: 1, color: 'gray' }} fontSize="small" />
-                  ),
-                }}
-              />
-              <Button
-                variant="outlined"
-                onClick={handleSelectRoot}
-                startIcon={<Storage />}
-              >
-                Browse
-              </Button>
-            </Box>
-          </Box>
+                  <Typography variant="body2" color="text.secondary" mt={1}>
+                    {app.description}
+                  </Typography>
 
-          <TextField
-            label="Proxy Pass (Opsional)"
-            fullWidth
-            value={nginxForm.target}
-            onChange={(e) =>
-              setNginxForm({ ...nginxForm, target: e.target.value })
-            }
-            placeholder="http://localhost:5000"
-            InputProps={{
-              startAdornment: (
-                <ElectricalServices
-                  sx={{ mr: 1, color: 'gray' }}
-                  fontSize="small"
-                />
-              ),
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    startIcon={
+                      deployLoading === app.key ? (
+                        <CircularProgress size={20} />
+                      ) : (
+                        <RocketLaunch />
+                      )
+                    }
+                    sx={{ mt: 3 }}
+                    disabled={deployLoading !== ''}
+                    onClick={() => {
+                      setSelectedDeploy(app.key);
+                      setOpenGitDialog(true);
+                    }}
+                  >
+                    {deployLoading === app.key ? 'Processing...' : 'Execute'}
+                  </Button>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Divider sx={{ my: 3 }} />
+
+          <Typography variant="subtitle1" fontWeight="bold" mb={1}>
+            Deployment Logs
+          </Typography>
+
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 2,
+              bgcolor: '#111',
+              color: '#00ff90',
+              height: 250,
+              overflow: 'auto',
+              fontFamily: 'monospace',
+              fontSize: 13,
             }}
-          />
+          >
+            {deployLogs.length === 0 ? (
+              <Typography variant="body2">No logs...</Typography>
+            ) : (
+              deployLogs.map((log, idx) => <Box key={idx}>{log}</Box>)
+            )}
+          </Paper>
         </DialogContent>
-        <DialogActions sx={{ p: 2, bgcolor: '#f9f9f9' }}>
-          <Button onClick={() => setOpenNginxForm(false)}>Batal</Button>
-          <Button onClick={handleSaveNginx} variant="contained">
-            Simpan & Apply
-          </Button>
+
+        <DialogActions>
+          <Button onClick={() => setDeployLogs([])}>Clear</Button>
+          <Button onClick={() => setOpenDeployDialog(false)}>Close</Button>
         </DialogActions>
-      </Dialog>
+      </Dialog>{' '}
+      <DialogGitAuthentication
+        open={openGitDialog}
+        onClose={() => setOpenGitDialog(false)}
+        gitForm={gitForm}
+        setGitForm={setGitForm}
+        loading={deployLoading !== ''}
+        onSubmit={async () => {
+          setOpenGitDialog(false);
+          await handleDeploy(selectedDeploy, gitForm);
+        }}
+      />
     </Box>
   );
 }

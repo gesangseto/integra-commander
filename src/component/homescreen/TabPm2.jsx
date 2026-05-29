@@ -67,10 +67,8 @@ export default function TabPm2() {
   const [isLoading, setIsLoading] = useState(false);
   const [openGitDialog, setOpenGitDialog] = useState(false);
   const [selectedDeploy, setSelectedDeploy] = useState('');
-  const [gitForm, setGitForm] = useState({
-    username: '',
-    password: '',
-  });
+  const [gitForm, setGitForm] = useState({ username: '', password: '' });
+
   const setting = useSettingStore((state) => state.form);
 
   const [pm2List, setPm2List] = useState([]);
@@ -174,6 +172,11 @@ export default function TabPm2() {
 
   const handleDeploy = async (type) => {
     try {
+      // Hapus folder temp
+      await runCommand(
+        ['/C', 'rmdir', '/S', '/Q', tempDir],
+        setting.workingDirectory,
+      ).catch(() => {});
       // =====================================================
       // START DEPLOYMENT
       // =====================================================
