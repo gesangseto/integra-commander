@@ -4,12 +4,11 @@ import {
   MonitorHeart,
   Refresh,
   RocketLaunch,
-  Settings,
   Stop,
-  Visibility,
 } from '@mui/icons-material';
 
 import {
+  Backdrop,
   Box,
   Button,
   Chip,
@@ -27,19 +26,17 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
-
+import { CircularProgress } from '@mui/material';
 import { useEffect, useState } from 'react';
 
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
 
-import { useAlert } from '../AlertProvider';
-import { openLocation } from '../../utility';
 import { useSettingStore } from '../../store/settingStore';
+import { useAlert } from '../AlertProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
 
 const DEPLOY_APPS = [
@@ -50,7 +47,7 @@ const DEPLOY_APPS = [
   },
   {
     key: 'api_core_update',
-    title: 'Install / Update Api Core Mertrack',
+    title: 'Update Api Core Mertrack',
     description: 'Pull latest source & reload PM2',
   },
   {
@@ -67,6 +64,7 @@ const DEPLOY_APPS = [
 
 export default function TabPm2() {
   const { showAlert } = useAlert();
+  const [isLoading, setIsLoading] = useState(false);
   const [openGitDialog, setOpenGitDialog] = useState(false);
   const [selectedDeploy, setSelectedDeploy] = useState('');
   const [gitForm, setGitForm] = useState({
@@ -77,8 +75,6 @@ export default function TabPm2() {
 
   const [pm2List, setPm2List] = useState([]);
 
-  const [openEnvDialog, setOpenEnvDialog] = useState(false);
-  const [openDetailDialog, setOpenDetailDialog] = useState(false);
   const [openDeployDialog, setOpenDeployDialog] = useState(false);
 
   const [envContent, setEnvContent] = useState('');
@@ -88,6 +84,9 @@ export default function TabPm2() {
 
   const [deployLoading, setDeployLoading] = useState('');
   const [deployLogs, setDeployLogs] = useState([]);
+
+  const tempDir = `${setting.workingDirectory}\\integra\\temp`;
+  const serviceDir = `${setting.workingDirectory}\\integra\\service`;
 
   useEffect(() => {
     fetchPm2List();
@@ -110,9 +109,6 @@ export default function TabPm2() {
       cwd,
     });
     const output = await cmd.execute();
-    // if (output.stdout) {
-    //   appendLog(output.stdout);
-    // }
     if (output.stderr) {
       appendLog(output.stderr);
     }
@@ -143,6 +139,7 @@ export default function TabPm2() {
   };
 
   const handlePm2Action = async (action, identifier) => {
+    setIsLoading(true);
     try {
       await Command.create('run-command', [
         '/C',
@@ -152,12 +149,12 @@ export default function TabPm2() {
       ]).execute();
 
       await new Promise((r) => setTimeout(r, 500));
-
       syncPm2Session();
-
       fetchPm2List();
     } catch (error) {
       showAlert(`${error}`, 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -175,83 +172,6 @@ export default function TabPm2() {
     }
   };
 
-  const handleOpenEnv = async (proc) => {
-    try {
-      const scriptPath = proc.pm2_env.pm_exec_path;
-
-      const lastSlash = Math.max(
-        scriptPath.lastIndexOf('\\'),
-        scriptPath.lastIndexOf('/'),
-      );
-
-      const directory = scriptPath.substring(0, lastSlash);
-
-      const envFilePath = `${directory}\\.env`;
-
-      setCurrentEnvPath(envFilePath);
-
-      setActiveAppName(proc.name);
-
-      const content = await readTextFile(envFilePath);
-
-      setEnvContent(content);
-
-      setOpenEnvDialog(true);
-    } catch (error) {
-      showAlert(`${error}`, 'error');
-    }
-  };
-
-  const handleSaveEnv = async () => {
-    try {
-      await writeTextFile(currentEnvPath, envContent);
-
-      setOpenEnvDialog(false);
-
-      await Command.create('run-command', [
-        '/C',
-        'pm2',
-        'restart',
-        activeAppName,
-        '--update-env',
-      ]).execute();
-
-      syncPm2Session();
-
-      fetchPm2List();
-
-      showAlert(`Berhasil merubah file.`, 'success');
-    } catch (error) {
-      showAlert(`${error}`, 'error');
-    }
-  };
-
-  const handleOpenDetail = (proc) => {
-    setSelectedProcess(proc);
-
-    setOpenDetailDialog(true);
-  };
-
-  const handleOpenLocation = (fullPath) => {
-    openLocation(fullPath, (err) => showAlert(err, 'error'));
-  };
-
-  const formatUptime = (timestamp) => {
-    if (!timestamp) return '0s';
-
-    const uptimeMs = Date.now() - timestamp;
-
-    const seconds = Math.floor(uptimeMs / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (days > 0) return `${days}hari ${hours % 24}jam`;
-    if (hours > 0) return `${hours}jam ${minutes % 60}m`;
-    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-
-    return `${seconds}s`;
-  };
   const handleDeploy = async (type) => {
     try {
       // =====================================================
@@ -265,68 +185,117 @@ export default function TabPm2() {
       appendLog('Starting deployment...');
 
       // =====================================================
-      // INSTALL PM2 LOGROTATE
-      // =====================================================
-      // Jika user memilih install logrotate
-      // maka tidak perlu proses clone/build
-      if (type === 'logrotate') {
-        await runCommand(['/C', 'pm2', 'install', 'pm2-logrotate'], 'C:\\');
-        appendLog('Logrotate installed');
-        return;
-      }
-
-      // =====================================================
-      // MENENTUKAN NAMA SERVICE
+      // MENENTUKAN NAMA SERVICE dan url git
       // =====================================================
       // Tentukan nama PM2 service berdasarkan type deployment
-      const serviceName =
-        type === 'api_core_fresh' || type === 'api_core_update'
-          ? setting.appName
-          : 'BPOM-API';
-
-      // =====================================================
-      // MENENTUKAN REPOSITORY GIT
-      // =====================================================
-      // Tentukan repository git berdasarkan service
-      const gitUrl =
-        type === 'api_core_fresh' || type === 'api_core_update'
-          ? 'https://gitlab.com/mertrack/mertrack-core'
-          : 'https://gitlab.com/gesang/connector-bpom';
-
+      let serviceName = '';
+      let gitUrl = '';
+      if (type === 'logrotate') {
+        serviceName = 'logrotate';
+        return await deployLogRotate();
+      } else if (type === 'api_core_fresh' || type === 'api_core_update') {
+        serviceName = setting.appName;
+        gitUrl = 'https://gitlab.com/mertrack/mertrack-core';
+      } else {
+        serviceName = 'BPOM-API';
+        gitUrl = 'https://gitlab.com/gesang/connector-bpom';
+      }
       // =====================================================
       // MEMBENTUK URL AUTHENTICATION GIT
       // =====================================================
-
       // Menyisipkan username + password/token
       // agar git clone private repository bisa berjalan
       const authUrl = gitUrl.replace(
         'https://',
         `https://${encodeURIComponent(gitForm.username)}:${encodeURIComponent(gitForm.password)}@`,
       );
+      await buildBackend(authUrl, serviceName);
+      await deployBackend(serviceName);
 
+      // =====================================================
+      // HAPUS TEMP DIRECTORY
+      // =====================================================
+      appendLog('Cleaning temp directory...');
+      // Hapus folder temp
+      await runCommand(
+        ['/C', 'rmdir', '/S', '/Q', tempDir],
+        setting.workingDirectory,
+      );
+    } catch (err) {
+      showAlert(`${err}`, 'error');
+    } finally {
+      setDeployLoading('');
+    }
+  };
+
+  const deployLogRotate = async () => {
+    await runCommand(['/C', 'pm2', 'install', 'pm2-logrotate'], 'C:\\');
+    appendLog('Logrotate installed');
+    return;
+  };
+
+  const deployBackend = async (serviceName) => {
+    try {
+      // =====================================================
+      // CHECK PM2 SERVICE
+      // =====================================================
+      appendLog('Checking PM2 service...');
+      // Ambil list PM2
+      const pm2 = await runCommand(
+        ['/C', 'pm2', 'jlist'],
+        setting.workingDirectory,
+      );
+      // =====================================================
+      // RELOAD ATAU START PM2
+      // =====================================================
+      // Jika service sudah ada
+      if (pm2.stdout.includes(`"name":"${serviceName}"`)) {
+        appendLog('Reloading PM2 service...');
+        // Reload PM2
+        await runCommand(['/C', 'pm2', 'reload', serviceName], serviceDir);
+      } else {
+        appendLog('Starting PM2 service...');
+        // Start PM2 baru
+        await runCommand(
+          ['/C', 'pm2', 'start', `${serviceName}.js`, '--name', serviceName],
+          serviceDir,
+        );
+      }
+      // =====================================================
+      // SAVE PM2 SESSION
+      // =====================================================
+      appendLog('Saving PM2 session...');
+      // Simpan agar auto startup saat reboot
+      await syncPm2Session();
+      // =====================================================
+      // SUCCESS
+      // =====================================================
+      appendLog('Deployment success');
+      // Refresh table PM2
+      fetchPm2List();
+      // Alert success
+      showAlert('Deployment success', 'success');
+    } catch (err) {
+      showAlert(`${err}`, 'error');
+    }
+  };
+  const buildBackend = async (url, serviceName) => {
+    try {
       // =====================================================
       // MENENTUKAN DIRECTORY
       // =====================================================
-
-      // Folder temporary clone git
-      const tempDir = `${setting.workingDirectory}\\temp\\${serviceName}`;
       // Folder hasil build
-      const buildDir = `${setting.workingDirectory}\\temp\\${serviceName}\\build`;
+      const buildDir = `${tempDir}\\build`;
       // Folder final service production
-      const serviceDir = `${setting.workingDirectory}\\service`;
-
       // =====================================================
       // CLONE REPOSITORY
       // =====================================================
-
       appendLog('Cloning repository...');
-
       // Clone latest source code
       await runCommand(
-        ['/C', 'git', 'clone', '--depth', '1', authUrl, tempDir],
+        ['/C', 'git', 'clone', '--depth', '1', url, tempDir],
         setting.workingDirectory,
       );
-
       // =====================================================
       // UPDATE FILE .ENV
       // =====================================================
@@ -335,6 +304,8 @@ export default function TabPm2() {
         APP_NAME: setting.appName,
         APP_PORT: setting.backendPort,
         LOGIN_TIMEOUT: 15,
+        DB_DIALECT: setting.databaseDialect,
+        DB_PORT: setting.databasePort,
         DB_DATABASE: setting.databaseName,
         DB_USER: setting.databaseUser,
         DB_PASSWORD: setting.databasePassword,
@@ -357,21 +328,18 @@ export default function TabPm2() {
       }
       // Simpan hasil env terbaru
       await writeTextFile(envPath, currentEnv);
-
       // =====================================================
       // INSTALL DEPENDENCIES
       // =====================================================
       appendLog('Installing dependencies...');
       // npm install
       await runCommand(['/C', 'npm', 'install'], tempDir);
-
       // =====================================================
       // BUILD PROJECT
       // =====================================================
       appendLog('Building application...');
       // npm run build
       await runCommand(['/C', 'npm', 'run', 'build'], tempDir);
-
       // =====================================================
       // COPY BUILD KE SERVICE PRODUCTION
       // =====================================================
@@ -394,72 +362,8 @@ export default function TabPm2() {
         ],
         setting.workingDirectory,
       );
-
-      // =====================================================
-      // CHECK PM2 SERVICE
-      // =====================================================
-      appendLog('Checking PM2 service...');
-      // Ambil list PM2
-      const pm2 = await runCommand(
-        ['/C', 'pm2', 'jlist'],
-        setting.workingDirectory,
-      );
-
-      // =====================================================
-      // RELOAD ATAU START PM2
-      // =====================================================
-      // Jika service sudah ada
-      if (pm2.stdout.includes(`"name":"${serviceName}"`)) {
-        appendLog('Reloading PM2 service...');
-        // Reload PM2
-        await runCommand(['/C', 'pm2', 'reload', serviceName], serviceDir);
-      } else {
-        appendLog('Starting PM2 service...');
-        // Start PM2 baru
-        await runCommand(
-          ['/C', 'pm2', 'start', `${serviceName}.js`, '--name', serviceName],
-          serviceDir,
-        );
-      }
-
-      // =====================================================
-      // SAVE PM2 SESSION
-      // =====================================================
-      appendLog('Saving PM2 session...');
-      // Simpan agar auto startup saat reboot
-      await syncPm2Session();
-
-      // =====================================================
-      // HAPUS TEMP DIRECTORY
-      // =====================================================
-      appendLog('Cleaning temp directory...');
-      // Hapus folder temp
-      await runCommand(
-        ['/C', 'rmdir', '/S', '/Q', tempDir],
-        setting.workingDirectory,
-      );
-
-      // =====================================================
-      // SUCCESS
-      // =====================================================
-      appendLog('Deployment success');
-      // Refresh table PM2
-      fetchPm2List();
-      // Alert success
-      showAlert('Deployment success', 'success');
     } catch (err) {
-      // =====================================================
-      // ERROR HANDLER
-      // =====================================================
-
-      appendLog(`ERROR: ${err}`);
       showAlert(`${err}`, 'error');
-    } finally {
-      // =====================================================
-      // FINISH LOADING
-      // =====================================================
-
-      setDeployLoading('');
     }
   };
   // helper update/add env
@@ -470,7 +374,24 @@ export default function TabPm2() {
     }
     return `${content.trim()}\n${key}=${value}\n`;
   };
-
+  const formatUptime = (timestamp) => {
+    if (!timestamp) return '0s';
+    const uptimeMs = Date.now() - timestamp;
+    const seconds = Math.floor(uptimeMs / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    if (days > 0) {
+      return `${days}d ${hours % 24}h`;
+    }
+    if (hours > 0) {
+      return `${hours}h ${minutes % 60}m`;
+    }
+    if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    }
+    return `${seconds}s`;
+  };
   return (
     <Box mt={2}>
       <Box display="flex" justifyContent="space-between" mb={2}>
@@ -493,6 +414,7 @@ export default function TabPm2() {
               <TableCell>ID</TableCell>
               <TableCell>Nama</TableCell>
               <TableCell>Status</TableCell>
+              <TableCell>Up Time</TableCell>
               <TableCell>RAM</TableCell>
               <TableCell>CPU</TableCell>
               <TableCell align="center">Aksi</TableCell>
@@ -517,21 +439,15 @@ export default function TabPm2() {
                 </TableCell>
 
                 <TableCell>
+                  {formatUptime(proc.pm2_env.pm_uptime)} Minutes
+                </TableCell>
+                <TableCell>
                   {(proc.monit.memory / 1024 / 1024).toFixed(1)} MB
                 </TableCell>
 
                 <TableCell>{proc.monit.cpu} %</TableCell>
 
                 <TableCell align="center">
-                  <Tooltip title="View Detail">
-                    <IconButton
-                      color="primary"
-                      onClick={() => handleOpenDetail(proc)}
-                    >
-                      <Visibility />
-                    </IconButton>
-                  </Tooltip>
-
                   <Tooltip title="Monitor CMD">
                     <IconButton
                       color="secondary"
@@ -556,15 +472,6 @@ export default function TabPm2() {
                       onClick={() => handlePm2Action('restart', proc.name)}
                     >
                       <Refresh />
-                    </IconButton>
-                  </Tooltip>
-
-                  <Tooltip title="Edit .env">
-                    <IconButton
-                      color="secondary"
-                      onClick={() => handleOpenEnv(proc)}
-                    >
-                      <Settings />
                     </IconButton>
                   </Tooltip>
 
@@ -613,7 +520,13 @@ export default function TabPm2() {
                   <Button
                     fullWidth
                     variant="contained"
-                    startIcon={<RocketLaunch />}
+                    startIcon={
+                      deployLoading === app.key ? (
+                        <CircularProgress size={20} />
+                      ) : (
+                        <RocketLaunch />
+                      )
+                    }
                     sx={{ mt: 3 }}
                     disabled={deployLoading !== ''}
                     onClick={() => {
@@ -670,6 +583,19 @@ export default function TabPm2() {
           await handleDeploy(selectedDeploy, gitForm);
         }}
       />
+      <Backdrop
+        open={isLoading}
+        sx={{
+          zIndex: 9999,
+          color: '#fff',
+          flexDirection: 'column',
+          gap: 2,
+          backgroundColor: 'rgba(0,0,0,0.75)',
+        }}
+      >
+        <CircularProgress color="inherit" />
+        <Typography variant="h6">Processing...</Typography>
+      </Backdrop>
     </Box>
   );
 }

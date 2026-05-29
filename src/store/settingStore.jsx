@@ -14,6 +14,8 @@ export const useSettingStore = create(
         backendPort: '',
         frontendPort: '',
 
+        databaseDialect: '',
+        databasePort: '',
         databaseName: '',
         databaseUser: '',
         databasePassword: '',
@@ -39,6 +41,8 @@ export const useSettingStore = create(
             backendPort: '',
             frontendPort: '',
 
+            databaseDialect: '',
+            databasePort: '',
             databaseName: '',
             databaseUser: '',
             databasePassword: '',

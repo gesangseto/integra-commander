@@ -10,6 +10,7 @@ import {
   PlayArrow,
   PlayArrowOutlined,
   Refresh,
+  RocketLaunch,
   Stop,
   StopCircleTwoTone,
   StopOutlined,
@@ -143,17 +144,15 @@ export default function TabNginx() {
 
   const reloadNginx = async () => {
     try {
-      const cmd = Command.create('run-command', [
-        '/C',
-        'nginx',
-        '-p',
-        nginxPath,
-        '-s',
-        'reload',
-      ]);
+      let args = ['/C', 'nginx', '-p', nginxPath, '-s', 'reload'];
+      console.log(args);
+      const cmd = Command.create('run-command', args);
       const output = await cmd.execute();
       if (output.code === 0) alert('Nginx Reload Success!');
-      else alert('Gagal Reload. Pastikan nginx.exe ada di PATH.');
+      else
+        alert(
+          'Gagal Reload. Pastikan nginx.exe sudah berjalan dan berada di PATH yang sesuai.',
+        );
 
       console.log(output);
     } catch (err) {
@@ -372,6 +371,36 @@ export default function TabNginx() {
           >
             Ubah Path
           </Button>
+          <Tooltip title="Start Nginx">
+            <IconButton
+              sx={{ height: 40, mt: 2.5 }}
+              color="success"
+              onClick={handleStartNginx}
+              size="small"
+            >
+              <PlayArrow />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Stop Nginx">
+            <IconButton
+              sx={{ height: 40, mt: 2.5 }}
+              color="error"
+              onClick={handleStopNginx}
+              size="small"
+            >
+              <Stop />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Reload Configuration">
+            <IconButton
+              sx={{ height: 40, mt: 2.5 }}
+              color="warning"
+              onClick={reloadNginx}
+              size="small"
+            >
+              <Refresh />
+            </IconButton>
+          </Tooltip>
         </Paper>
 
         {/* Bagian Bawah: Header Tabel & Kontrol Service */}
@@ -382,46 +411,9 @@ export default function TabNginx() {
 
           <Box display="flex" alignItems="center" gap={1.5}>
             {/* Group Service Control */}
-            <Paper
-              variant="outlined"
-              sx={{
-                display: 'flex',
-                p: 0.5,
-                borderRadius: 2,
-                bgcolor: '#fff',
-                boxShadow: '0px 2px 4px rgba(0,0,0,0.05)',
-              }}
-            >
-              <Tooltip title="Start Nginx">
-                <IconButton
-                  color="success"
-                  onClick={handleStartNginx}
-                  size="small"
-                >
-                  <PlayArrow />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Stop Nginx">
-                <IconButton
-                  color="error"
-                  onClick={handleStopNginx}
-                  size="small"
-                >
-                  <Stop />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Reload Configuration">
-                <IconButton color="warning" onClick={reloadNginx} size="small">
-                  <Refresh />
-                </IconButton>
-              </Tooltip>
-            </Paper>
-
-            <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
-
             <Button
               variant="contained"
-              startIcon={<Add />}
+              startIcon={<RocketLaunch />}
               onClick={() => {
                 setIsEditMode(false);
                 setNginxForm({
@@ -436,7 +428,7 @@ export default function TabNginx() {
               }}
               sx={{ borderRadius: 2, px: 3 }}
             >
-              Tambah Host
+              Tambah / Update App
             </Button>
           </Box>
         </Box>

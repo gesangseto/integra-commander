@@ -41,6 +41,15 @@ function SettingScreen() {
     }
   }, []);
 
+  useEffect(() => {
+    if (form.databaseDialect) {
+      setLocalForm((prev) => ({
+        ...prev,
+        databasePort: form.databaseDialect == 'mssql' ? 1433 : 5432,
+      }));
+    }
+  }, [form.databaseDialect]);
+
   // ================= HANDLE CHANGE =================
   const handleChange = (key, value) => {
     setLocalForm((prev) => ({
@@ -198,7 +207,41 @@ function SettingScreen() {
               <MenuItem value="last_6_month">Last 6 Month</MenuItem>
             </TextField>
           </Grid>
+        </Grid>
+      </Box>
+      {/* ========================================================= */}
+      {/* ================= DATABASE SETUP =========================== */}
+      {/* ========================================================= */}
+      <Box mt={5}>
+        <Typography variant="h6" fontWeight="bold" mb={2}>
+          Database Setup
+        </Typography>
 
+        <Divider sx={{ mb: 3 }} />
+
+        <Grid container spacing={3}>
+          {/* ================= DB DIALECT ================= */}
+          <Grid item xs={12} md={6}>
+            <TextField
+              select
+              fullWidth
+              label="Database Dialect"
+              value={form.databaseDialect || 'postgres'}
+              onChange={(e) => handleChange('databaseDialect', e.target.value)}
+            >
+              <MenuItem value="postgres">PostgreSql</MenuItem>
+              <MenuItem value="mssql">Microsoft SQL</MenuItem>
+            </TextField>
+          </Grid>
+          {/* ================= DB PORT ================= */}
+          <Grid item xs={12} md={6}>
+            <TextField
+              fullWidth
+              label="Database Port"
+              value={form.databasePort || ''}
+              onChange={(e) => handleChange('databasePort', e.target.value)}
+            />
+          </Grid>
           {/* ================= DB NAME ================= */}
           <Grid item xs={12} md={6}>
             <TextField
