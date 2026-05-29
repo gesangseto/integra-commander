@@ -1,6 +1,7 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::net::UdpSocket;
 use sysinfo::{System, Disks};
 use std::{thread, time::Duration};
 use tauri::Emitter; // Dibutuhkan untuk mengirim event
@@ -19,6 +20,22 @@ fn shutdown() {
         .spawn();
 }
 
+#[tauri::command]
+fn get_local_ip() -> Result<String, String> {
+    let socket = UdpSocket::bind("0.0.0.0:0")
+        .map_err(|e| e.to_string())?;
+
+    socket
+        .connect("8.8.8.8:80")
+        .map_err(|e| e.to_string())?;
+
+    let addr = socket
+        .local_addr()
+        .map_err(|e| e.to_string())?;
+
+    Ok(addr.ip().to_string())
+}
+
 fn main() {
     let _ = fix_path_env::fix();
     
@@ -29,7 +46,7 @@ fn main() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_serialplugin::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
-        .invoke_handler(tauri::generate_handler![shutdown])
+        .invoke_handler(tauri::generate_handler![shutdown, get_local_ip])
         .setup(|app| {
             let handle = app.handle().clone();
             // Jalankan BACKGROUND THREAD untuk memantau sistem

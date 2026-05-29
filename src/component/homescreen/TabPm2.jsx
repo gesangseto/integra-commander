@@ -1,7 +1,5 @@
 import {
-  Add,
   Delete,
-  Edit,
   FolderOpen,
   MonitorHeart,
   Refresh,
@@ -10,6 +8,7 @@ import {
   Stop,
   Visibility,
 } from '@mui/icons-material';
+
 import {
   Box,
   Button,
@@ -32,93 +31,102 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+
 import { useEffect, useState } from 'react';
-// Import API Plugin Tauri v2
-import { open } from '@tauri-apps/plugin-dialog';
+
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
+
 import { useAlert } from '../AlertProvider';
 import { openLocation } from '../../utility';
+import { useSettingStore } from '../../store/settingStore';
+import DialogGitAuthentication from '../DialogGitAuthentication';
+
+const DEPLOY_APPS = [
+  {
+    key: 'api_core_fresh',
+    title: 'Fresh Install Api Core Mertrack',
+    description: 'Install + Seeder + PM2',
+  },
+  {
+    key: 'api_core_update',
+    title: 'Install / Update Api Core Mertrack',
+    description: 'Pull latest source & reload PM2',
+  },
+  {
+    key: 'bpom_api',
+    title: 'Install / Update BPOM API',
+    description: 'Deploy BPOM API service',
+  },
+  {
+    key: 'logrotate',
+    title: 'Install Logrotate',
+    description: 'Setup PM2 log rotation',
+  },
+];
 
 export default function TabPm2() {
   const { showAlert } = useAlert();
-  // ================= STATE MANAGEMENT =================
+  const [openGitDialog, setOpenGitDialog] = useState(false);
+  const [selectedDeploy, setSelectedDeploy] = useState('');
+  const [gitForm, setGitForm] = useState({
+    username: '',
+    password: '',
+  });
+  const setting = useSettingStore((state) => state.form);
+
   const [pm2List, setPm2List] = useState([]);
 
-  // Modals Visibility
-  const [openPm2Form, setOpenPm2Form] = useState(false);
   const [openEnvDialog, setOpenEnvDialog] = useState(false);
   const [openDetailDialog, setOpenDetailDialog] = useState(false);
+  const [openDeployDialog, setOpenDeployDialog] = useState(false);
 
-  // Form and Data State
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [pm2Form, setPm2Form] = useState({ name: '', path: '', id: null });
   const [envContent, setEnvContent] = useState('');
   const [currentEnvPath, setCurrentEnvPath] = useState('');
   const [activeAppName, setActiveAppName] = useState('');
   const [selectedProcess, setSelectedProcess] = useState(null);
 
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      initPm2();
-    }, 5000); // Tunggu 5 detik setelah mount baru panggil resurrect
-    return () => clearTimeout(timeout);
-  }, []);
-
-  const initPm2 = async () => {
-    try {
-      // Pisahkan setiap argumen ke dalam array
-      let bangunin = Command.create('run-command', ['/C', 'pm2', 'resurrect']);
-      const output = await bangunin.execute();
-      fetchPm2List();
-    } catch (error) {
-      showAlert(`${error}`, 'error');
-    }
-  };
+  const [deployLoading, setDeployLoading] = useState('');
+  const [deployLogs, setDeployLogs] = useState([]);
 
   useEffect(() => {
     fetchPm2List();
-    const interval = setInterval(fetchPm2List, 10000); // Auto-refresh data setiap 10 detik
+
+    const interval = setInterval(fetchPm2List, 10000);
+
     return () => clearInterval(interval);
   }, []);
 
-  // ================= FETCH DATA PM2 =================
+  const appendLog = (msg) => {
+    setDeployLogs((prev) => [
+      ...prev,
+      `[${new Date().toLocaleTimeString()}] ${msg}`,
+    ]);
+  };
+
+  const runCommand = async (args, cwd) => {
+    appendLog(args.join(' '));
+    const cmd = Command.create('run-command', args, {
+      cwd,
+    });
+    const output = await cmd.execute();
+    // if (output.stdout) {
+    //   appendLog(output.stdout);
+    // }
+    if (output.stderr) {
+      appendLog(output.stderr);
+    }
+    return output;
+  };
+
   const fetchPm2List = async () => {
     try {
       const pm2 = Command.create('run-command', ['/C', 'pm2', 'jlist']);
+
       const output = await pm2.execute();
+
       if (output.stdout) {
         setPm2List(JSON.parse(output.stdout));
-      }
-    } catch (error) {
-      showAlert(`Error saat fetching pm2: ${error}`, 'error');
-    }
-  };
-
-  // ================= PM2 ACTIONS =================
-
-  // Fungsi memilih file script biner melalui explorer native
-  const handleSelectFile = async () => {
-    try {
-      const selected = await open({
-        multiple: false,
-        filters: [
-          { name: 'JavaScript', extensions: ['js', 'json', 'cjs', 'mjs'] },
-        ],
-      });
-      if (selected) {
-        // Otomatis mengiris nama file untuk dijadikan label nama aplikasi jika kosong
-        const fileName = selected
-          .split('\\')
-          .pop()
-          .split('/')
-          .pop()
-          .replace(/\.[^/.]+$/, '');
-        setPm2Form({
-          ...pm2Form,
-          path: selected,
-          name: pm2Form.name || fileName,
-        });
       }
     } catch (error) {
       showAlert(`${error}`, 'error');
@@ -126,7 +134,6 @@ export default function TabPm2() {
   };
 
   const syncPm2Session = async () => {
-    // Jalankan di background tanpa mengganggu UI
     await Command.create('run-command', [
       '/C',
       'pm2',
@@ -135,45 +142,6 @@ export default function TabPm2() {
     ]).execute();
   };
 
-  // Fungsi simpan penambahan dan pengeditan app
-  const handleSavePm2 = async () => {
-    if (!pm2Form.path || !pm2Form.name) return alert('Data wajib diisi!');
-    try {
-      if (isEditMode) {
-        // Delete yang lama
-        await Command.create('run-command', [
-          '/C',
-          'pm2',
-          'delete',
-          pm2Form.id,
-        ]).execute();
-      }
-      // Bentuk app yang baru
-      const lastSlash = Math.max(
-        pm2Form.path.lastIndexOf('\\'),
-        pm2Form.path.lastIndexOf('/'),
-      );
-      const folderPath = pm2Form.path.substring(0, lastSlash);
-      await Command.create('run-command', [
-        '/C',
-        'pm2',
-        'start',
-        pm2Form.path,
-        '--name',
-        pm2Form.name,
-        '--cwd', // <--- Set Current Working Directory
-        folderPath,
-      ]).execute();
-      setOpenPm2Form(false);
-      setPm2Form({ name: '', path: '', id: null });
-      fetchPm2List();
-      await syncPm2Session(); // <--- Sinkronisasi otomatis
-    } catch (error) {
-      showAlert(`${error}`, 'error');
-    }
-  };
-
-  // Fungsi dinamis untuk stop, restart, delete
   const handlePm2Action = async (action, identifier) => {
     try {
       await Command.create('run-command', [
@@ -183,18 +151,18 @@ export default function TabPm2() {
         identifier,
       ]).execute();
 
-      // Berikan jeda 500ms agar PM2 menyelesaikan operasi I/O
       await new Promise((r) => setTimeout(r, 500));
+
       syncPm2Session();
+
       fetchPm2List();
     } catch (error) {
       showAlert(`${error}`, 'error');
     }
   };
-  // FITUR: Buka PM2 Monit di Jendela CMD Terpisah
+
   const handleOpenExternalMonit = async (procId) => {
     try {
-      // Membuka jendela terminal baru dan menjalankan monit khusus ID tersebut
       await Command.create('run-command', [
         '/C',
         'start',
@@ -206,22 +174,28 @@ export default function TabPm2() {
       showAlert(`${error}`, 'error');
     }
   };
-  // ================= .ENV EDIT LOGIC =================
+
   const handleOpenEnv = async (proc) => {
     try {
       const scriptPath = proc.pm2_env.pm_exec_path;
+
       const lastSlash = Math.max(
         scriptPath.lastIndexOf('\\'),
         scriptPath.lastIndexOf('/'),
       );
+
       const directory = scriptPath.substring(0, lastSlash);
-      const envFilePath = `${directory}\\.env`; // Memastikan path Windows konsisten menggunakan backslash
+
+      const envFilePath = `${directory}\\.env`;
 
       setCurrentEnvPath(envFilePath);
+
       setActiveAppName(proc.name);
 
       const content = await readTextFile(envFilePath);
+
       setEnvContent(content);
+
       setOpenEnvDialog(true);
     } catch (error) {
       showAlert(`${error}`, 'error');
@@ -231,8 +205,9 @@ export default function TabPm2() {
   const handleSaveEnv = async () => {
     try {
       await writeTextFile(currentEnvPath, envContent);
+
       setOpenEnvDialog(false);
-      // Merestart dengan flag update-env agar mengambil value berkas baru
+
       await Command.create('run-command', [
         '/C',
         'pm2',
@@ -240,27 +215,32 @@ export default function TabPm2() {
         activeAppName,
         '--update-env',
       ]).execute();
+
       syncPm2Session();
+
       fetchPm2List();
+
       showAlert(`Berhasil merubah file.`, 'success');
     } catch (error) {
       showAlert(`${error}`, 'error');
     }
   };
 
-  // ================= DETAIL & LOG =================
   const handleOpenDetail = (proc) => {
     setSelectedProcess(proc);
+
     setOpenDetailDialog(true);
   };
 
   const handleOpenLocation = (fullPath) => {
     openLocation(fullPath, (err) => showAlert(err, 'error'));
   };
-  // Menghitung string durasi online proses
+
   const formatUptime = (timestamp) => {
     if (!timestamp) return '0s';
+
     const uptimeMs = Date.now() - timestamp;
+
     const seconds = Math.floor(uptimeMs / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
@@ -269,442 +249,436 @@ export default function TabPm2() {
     if (days > 0) return `${days}hari ${hours % 24}jam`;
     if (hours > 0) return `${hours}jam ${minutes % 60}m`;
     if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+
     return `${seconds}s`;
   };
+  const handleDeploy = async (type) => {
+    try {
+      // =====================================================
+      // START DEPLOYMENT
+      // =====================================================
+      // Menandai deploy sedang berjalan
+      setDeployLoading(type);
+      // Reset log deployment sebelumnya
+      setDeployLogs([]);
+      // Tambahkan log awal
+      appendLog('Starting deployment...');
 
-  // ================= VIEW LAYOUT =================
+      // =====================================================
+      // INSTALL PM2 LOGROTATE
+      // =====================================================
+      // Jika user memilih install logrotate
+      // maka tidak perlu proses clone/build
+      if (type === 'logrotate') {
+        await runCommand(['/C', 'pm2', 'install', 'pm2-logrotate'], 'C:\\');
+        appendLog('Logrotate installed');
+        return;
+      }
+
+      // =====================================================
+      // MENENTUKAN NAMA SERVICE
+      // =====================================================
+      // Tentukan nama PM2 service berdasarkan type deployment
+      const serviceName =
+        type === 'api_core_fresh' || type === 'api_core_update'
+          ? setting.appName
+          : 'BPOM-API';
+
+      // =====================================================
+      // MENENTUKAN REPOSITORY GIT
+      // =====================================================
+      // Tentukan repository git berdasarkan service
+      const gitUrl =
+        type === 'api_core_fresh' || type === 'api_core_update'
+          ? 'https://gitlab.com/mertrack/mertrack-core'
+          : 'https://gitlab.com/gesang/connector-bpom';
+
+      // =====================================================
+      // MEMBENTUK URL AUTHENTICATION GIT
+      // =====================================================
+
+      // Menyisipkan username + password/token
+      // agar git clone private repository bisa berjalan
+      const authUrl = gitUrl.replace(
+        'https://',
+        `https://${encodeURIComponent(gitForm.username)}:${encodeURIComponent(gitForm.password)}@`,
+      );
+
+      // =====================================================
+      // MENENTUKAN DIRECTORY
+      // =====================================================
+
+      // Folder temporary clone git
+      const tempDir = `${setting.workingDirectory}\\temp\\${serviceName}`;
+      // Folder hasil build
+      const buildDir = `${setting.workingDirectory}\\temp\\${serviceName}\\build`;
+      // Folder final service production
+      const serviceDir = `${setting.workingDirectory}\\service`;
+
+      // =====================================================
+      // CLONE REPOSITORY
+      // =====================================================
+
+      appendLog('Cloning repository...');
+
+      // Clone latest source code
+      await runCommand(
+        ['/C', 'git', 'clone', '--depth', '1', authUrl, tempDir],
+        setting.workingDirectory,
+      );
+
+      // =====================================================
+      // UPDATE FILE .ENV
+      // =====================================================
+      // Variable environment yang akan diupdate
+      let envField = {
+        APP_NAME: setting.appName,
+        APP_PORT: setting.backendPort,
+        LOGIN_TIMEOUT: 15,
+        DB_DATABASE: setting.databaseName,
+        DB_USER: setting.databaseUser,
+        DB_PASSWORD: setting.databasePassword,
+      };
+      appendLog('Updating .env file...');
+      // Path file .env
+      const envPath = `${tempDir}\\.env`;
+      // Isi env existing
+      let currentEnv = '';
+      try {
+        // Membaca .env jika ada
+        currentEnv = await readTextFile(envPath);
+      } catch {
+        // Jika tidak ada maka buat baru
+        appendLog('.env not found, creating new file...');
+      }
+      // Loop semua envField lalu update/add ke .env
+      for (const key in envField) {
+        currentEnv = setEnvValue(currentEnv, key, envField[key] || '');
+      }
+      // Simpan hasil env terbaru
+      await writeTextFile(envPath, currentEnv);
+
+      // =====================================================
+      // INSTALL DEPENDENCIES
+      // =====================================================
+      appendLog('Installing dependencies...');
+      // npm install
+      await runCommand(['/C', 'npm', 'install'], tempDir);
+
+      // =====================================================
+      // BUILD PROJECT
+      // =====================================================
+      appendLog('Building application...');
+      // npm run build
+      await runCommand(['/C', 'npm', 'run', 'build'], tempDir);
+
+      // =====================================================
+      // COPY BUILD KE SERVICE PRODUCTION
+      // =====================================================
+      appendLog('Copying build to service...');
+      // Copy seluruh build ke folder service
+      await runCommand(
+        ['/C', 'xcopy', buildDir, serviceDir, '/E', '/I', '/Y'],
+        setting.workingDirectory,
+      );
+      // Copy seluruh node_module ke folder service
+      await runCommand(
+        [
+          '/C',
+          'xcopy',
+          `${tempDir}\\node_modules`,
+          `${serviceDir}\\node_modules`,
+          '/E',
+          '/I',
+          '/Y',
+        ],
+        setting.workingDirectory,
+      );
+
+      // =====================================================
+      // CHECK PM2 SERVICE
+      // =====================================================
+      appendLog('Checking PM2 service...');
+      // Ambil list PM2
+      const pm2 = await runCommand(
+        ['/C', 'pm2', 'jlist'],
+        setting.workingDirectory,
+      );
+
+      // =====================================================
+      // RELOAD ATAU START PM2
+      // =====================================================
+      // Jika service sudah ada
+      if (pm2.stdout.includes(`"name":"${serviceName}"`)) {
+        appendLog('Reloading PM2 service...');
+        // Reload PM2
+        await runCommand(['/C', 'pm2', 'reload', serviceName], serviceDir);
+      } else {
+        appendLog('Starting PM2 service...');
+        // Start PM2 baru
+        await runCommand(
+          ['/C', 'pm2', 'start', `${serviceName}.js`, '--name', serviceName],
+          serviceDir,
+        );
+      }
+
+      // =====================================================
+      // SAVE PM2 SESSION
+      // =====================================================
+      appendLog('Saving PM2 session...');
+      // Simpan agar auto startup saat reboot
+      await syncPm2Session();
+
+      // =====================================================
+      // HAPUS TEMP DIRECTORY
+      // =====================================================
+      appendLog('Cleaning temp directory...');
+      // Hapus folder temp
+      await runCommand(
+        ['/C', 'rmdir', '/S', '/Q', tempDir],
+        setting.workingDirectory,
+      );
+
+      // =====================================================
+      // SUCCESS
+      // =====================================================
+      appendLog('Deployment success');
+      // Refresh table PM2
+      fetchPm2List();
+      // Alert success
+      showAlert('Deployment success', 'success');
+    } catch (err) {
+      // =====================================================
+      // ERROR HANDLER
+      // =====================================================
+
+      appendLog(`ERROR: ${err}`);
+      showAlert(`${err}`, 'error');
+    } finally {
+      // =====================================================
+      // FINISH LOADING
+      // =====================================================
+
+      setDeployLoading('');
+    }
+  };
+  // helper update/add env
+  const setEnvValue = (content, key, value) => {
+    const regex = new RegExp(`^${key}=.*$`, 'm');
+    if (regex.test(content)) {
+      return content.replace(regex, `${key}=${value}`);
+    }
+    return `${content.trim()}\n${key}=${value}\n`;
+  };
+
   return (
     <Box mt={2}>
       <Box display="flex" justifyContent="space-between" mb={2}>
         <Typography variant="h6" fontWeight="bold" color="primary.main">
           PM2 Management
         </Typography>
+
         <Button
           variant="contained"
-          startIcon={<Add />}
-          onClick={() => {
-            setIsEditMode(false);
-            setOpenPm2Form(true);
-          }}
+          startIcon={<RocketLaunch />}
+          onClick={() => setOpenDeployDialog(true)}
         >
-          Tambah App
+          Tambah / Update App
         </Button>
       </Box>
-      {/* TABEL UTAMA PM2 */}
       <TableContainer component={Paper} variant="outlined">
         <Table>
           <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
             <TableRow>
-              <TableCell>
-                <strong>ID</strong>
-              </TableCell>
-              <TableCell>
-                <strong>Nama</strong>
-              </TableCell>
-              <TableCell>
-                <strong>Status</strong>
-              </TableCell>
-              <TableCell>
-                <strong>RAM</strong>
-              </TableCell>
-              <TableCell>
-                <strong>CPU</strong>
-              </TableCell>
-              <TableCell align="center">
-                <strong>Aksi</strong>
-              </TableCell>
+              <TableCell>ID</TableCell>
+              <TableCell>Nama</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>RAM</TableCell>
+              <TableCell>CPU</TableCell>
+              <TableCell align="center">Aksi</TableCell>
             </TableRow>
           </TableHead>
+
           <TableBody>
-            {pm2List.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center">
-                  Tidak ada proses PM2 yang berjalan
+            {pm2List.map((proc) => (
+              <TableRow key={proc.pm_id}>
+                <TableCell>{proc.pm_id}</TableCell>
+
+                <TableCell>{proc.name}</TableCell>
+
+                <TableCell>
+                  <Chip
+                    label={proc.pm2_env.status}
+                    color={
+                      proc.pm2_env.status === 'online' ? 'success' : 'error'
+                    }
+                    size="small"
+                  />
+                </TableCell>
+
+                <TableCell>
+                  {(proc.monit.memory / 1024 / 1024).toFixed(1)} MB
+                </TableCell>
+
+                <TableCell>{proc.monit.cpu} %</TableCell>
+
+                <TableCell align="center">
+                  <Tooltip title="View Detail">
+                    <IconButton
+                      color="primary"
+                      onClick={() => handleOpenDetail(proc)}
+                    >
+                      <Visibility />
+                    </IconButton>
+                  </Tooltip>
+
+                  <Tooltip title="Monitor CMD">
+                    <IconButton
+                      color="secondary"
+                      onClick={() => handleOpenExternalMonit(proc.pm_id)}
+                    >
+                      <MonitorHeart />
+                    </IconButton>
+                  </Tooltip>
+
+                  <Tooltip title="Stop">
+                    <IconButton
+                      color="warning"
+                      onClick={() => handlePm2Action('stop', proc.name)}
+                    >
+                      <Stop />
+                    </IconButton>
+                  </Tooltip>
+
+                  <Tooltip title="Restart">
+                    <IconButton
+                      color="success"
+                      onClick={() => handlePm2Action('restart', proc.name)}
+                    >
+                      <Refresh />
+                    </IconButton>
+                  </Tooltip>
+
+                  <Tooltip title="Edit .env">
+                    <IconButton
+                      color="secondary"
+                      onClick={() => handleOpenEnv(proc)}
+                    >
+                      <Settings />
+                    </IconButton>
+                  </Tooltip>
+
+                  <Tooltip title="Delete">
+                    <IconButton
+                      color="error"
+                      onClick={() => handlePm2Action('delete', proc.name)}
+                    >
+                      <Delete />
+                    </IconButton>
+                  </Tooltip>
                 </TableCell>
               </TableRow>
-            ) : (
-              pm2List.map((proc) => (
-                <TableRow key={proc.pm_id}>
-                  <TableCell>{proc.pm_id}</TableCell>
-                  <TableCell>{proc.name}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={proc.pm2_env.status}
-                      color={
-                        proc.pm2_env.status === 'online' ? 'success' : 'error'
-                      }
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {(proc.monit.memory / 1024 / 1024).toFixed(1)} MB
-                  </TableCell>
-                  <TableCell>{proc.monit.cpu} %</TableCell>
-                  <TableCell align="center">
-                    <Tooltip title="View Detail">
-                      <IconButton
-                        color="primary"
-                        onClick={() => handleOpenDetail(proc)}
-                      >
-                        <Visibility />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Monitor CMD">
-                      <IconButton
-                        color="secondary"
-                        onClick={() => handleOpenExternalMonit(proc.pm_id)}
-                      >
-                        <MonitorHeart />
-                      </IconButton>
-                    </Tooltip>
-
-                    <Tooltip title="Stop">
-                      <IconButton
-                        color="warning"
-                        onClick={() => handlePm2Action('stop', proc.name)}
-                      >
-                        <Stop />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Restart">
-                      <IconButton
-                        color="success"
-                        onClick={() => handlePm2Action('restart', proc.name)}
-                      >
-                        <Refresh />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Edit .env">
-                      <IconButton
-                        color="secondary"
-                        onClick={() => handleOpenEnv(proc)}
-                      >
-                        <Settings />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Edit App">
-                      <IconButton
-                        color="info"
-                        onClick={() => {
-                          setIsEditMode(true);
-                          setPm2Form({
-                            name: proc.name,
-                            path: proc.pm2_env.pm_exec_path,
-                            id: proc.name,
-                          });
-                          setOpenPm2Form(true);
-                        }}
-                      >
-                        <Edit />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete">
-                      <IconButton
-                        color="error"
-                        onClick={() => handlePm2Action('delete', proc.name)}
-                      >
-                        <Delete />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
+            ))}
           </TableBody>
         </Table>
       </TableContainer>
-      {/* 1. DIALOG FORM TAMBAH/EDIT PM2 */}
       <Dialog
-        open={openPm2Form}
-        onClose={() => setOpenPm2Form(false)}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>
-          {isEditMode ? 'Edit Aplikasi PM2' : 'Tambah Aplikasi PM2'}
-        </DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Nama Aplikasi"
-            fullWidth
-            variant="outlined"
-            value={pm2Form.name}
-            onChange={(e) => setPm2Form({ ...pm2Form, name: e.target.value })}
-          />
-          <Box display="flex" gap={1} alignItems="center" mt={2}>
-            <TextField
-              label="Path File Script (JS)"
-              fullWidth
-              variant="outlined"
-              value={pm2Form.path}
-              disabled
-            />
-            <Button
-              variant="contained"
-              startIcon={<FolderOpen />}
-              onClick={handleSelectFile}
-              sx={{ height: '56px', whiteSpace: 'nowrap' }}
-            >
-              Cari
-            </Button>
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setOpenPm2Form(false)} color="inherit">
-            Batal
-          </Button>
-          <Button onClick={handleSavePm2} variant="contained" color="primary">
-            Simpan
-          </Button>
-        </DialogActions>
-      </Dialog>
-      {/* 2. DIALOG EDIT .ENV */}
-      <Dialog
-        open={openEnvDialog}
-        onClose={() => setOpenEnvDialog(false)}
+        open={openDeployDialog}
+        onClose={() => setOpenDeployDialog(false)}
         fullWidth
         maxWidth="md"
       >
-        <DialogTitle>
-          Mengedit file .env: <b>{activeAppName}</b>
-        </DialogTitle>
+        <DialogTitle>Deployment Manager</DialogTitle>
+
         <DialogContent>
-          <Typography
-            variant="caption"
-            color="textSecondary"
-            sx={{ mb: 1, display: 'block' }}
-          >
-            Lokasi: {currentEnvPath}
-          </Typography>
-          <TextField
-            multiline
-            rows={12}
-            fullWidth
-            variant="outlined"
-            value={envContent}
-            onChange={(e) => setEnvContent(e.target.value)}
-            sx={{ fontFamily: 'monospace' }}
-          />
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setOpenEnvDialog(false)} color="inherit">
-            Batal
-          </Button>
-          <Button onClick={handleSaveEnv} variant="contained" color="success">
-            Simpan & Restart
-          </Button>
-        </DialogActions>
-      </Dialog>
-      {/* 3. DIALOG VIEW DETAIL PM2 */}
-      <Dialog
-        open={openDetailDialog}
-        onClose={() => setOpenDetailDialog(false)}
-        fullWidth
-        maxWidth="md"
-        PaperProps={{ sx: { borderRadius: 2 } }}
-      >
-        <DialogTitle
-          sx={{
-            pb: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <Box>
-            <Typography variant="h6" component="span" fontWeight="bold">
-              Detail Proses:{' '}
-            </Typography>
-            <Typography variant="h6" component="span" color="primary">
-              {selectedProcess?.name}
-            </Typography>
-          </Box>
-          <Chip
-            label={selectedProcess?.pm2_env.status.toUpperCase()}
-            color={
-              selectedProcess?.pm2_env.status === 'online' ? 'success' : 'error'
-            }
-            size="small"
-            sx={{ fontWeight: 'bold' }}
-          />
-        </DialogTitle>
-
-        <Divider />
-
-        <DialogContent sx={{ py: 3 }}>
-          {selectedProcess && (
-            <Grid container spacing={4}>
-              <Grid container spacing={2}>
-                {[
-                  { label: 'ID Aplikasi', value: selectedProcess.pm_id },
-                  {
-                    label: 'Status',
-                    value: selectedProcess.pm2_env.status.toUpperCase(),
-                    isChip: true,
-                  },
-                  { label: 'Sistem PID', value: selectedProcess.pid },
-                  {
-                    label: 'Uptime',
-                    value: formatUptime(selectedProcess.pm2_env.pm_uptime),
-                  },
-                  {
-                    label: 'Mode Eksekusi',
-                    value: selectedProcess.pm2_env.exec_mode,
-                  },
-                  {
-                    label: 'Versi Node',
-                    value: selectedProcess.pm2_env.node_version,
-                  },
-                  {
-                    label: 'Restarts',
-                    value: selectedProcess.pm2_env.restart_time,
-                    color: 'warning.main',
-                  },
-                  {
-                    label: 'Memori',
-                    value: `${(selectedProcess.monit.memory / 1024 / 1024).toFixed(2)} MB`,
-                  },
-                ].map((item, index) => (
-                  <Grid item xs={6} sm={3} key={index}>
-                    <Box
-                      sx={{
-                        p: 1.5,
-                        bgcolor: '#fcfcfd',
-                        border: '1px solid #eef0f2',
-                        borderRadius: 2,
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Typography
-                        variant="caption"
-                        color="textSecondary"
-                        sx={{
-                          fontWeight: 600,
-                          fontSize: '0.65rem',
-                          textTransform: 'uppercase',
-                          mb: 0.5,
-                        }}
-                      >
-                        {item.label}
-                      </Typography>
-
-                      {item.isChip ? (
-                        <Chip
-                          label={item.value}
-                          size="small"
-                          color={item.value === 'ONLINE' ? 'success' : 'error'}
-                          sx={{
-                            fontWeight: 'bold',
-                            fontSize: '0.7rem',
-                            height: 20,
-                            width: 'fit-content',
-                          }}
-                        />
-                      ) : (
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            fontWeight: 'bold',
-                            color: item.color || 'text.primary',
-                          }}
-                        >
-                          {item.value || 'N/A'}
-                        </Typography>
-                      )}
-                    </Box>
-                  </Grid>
-                ))}
-              </Grid>
-
-              <Grid item xs={12} sx={{ width: '100%' }}>
-                <Box
+          <Grid container spacing={2}>
+            {DEPLOY_APPS.map((app) => (
+              <Grid item xs={12} md={6} key={app.key}>
+                <Paper
+                  variant="outlined"
                   sx={{
-                    mt: 1,
                     p: 2,
-                    bgcolor: '#f8f9fa',
                     borderRadius: 2,
-                    border: '1px solid #e0e0e0',
+                    minWidth: 375,
                   }}
                 >
-                  <Typography
-                    variant="subtitle2"
-                    color="primary"
-                    sx={{ mb: 2, fontWeight: 'bold' }}
-                  >
-                    Informasi Lokasi & Log
+                  <Typography variant="h6" fontWeight="bold">
+                    {app.title}
                   </Typography>
 
-                  <PathRow
-                    label="Lokasi Eksekusi"
-                    path={selectedProcess.pm2_env.pm_exec_path}
-                    onOpen={() =>
-                      handleOpenLocation(selectedProcess.pm2_env.pm_exec_path)
-                    }
-                  />
+                  <Typography variant="body2" color="text.secondary" mt={1}>
+                    {app.description}
+                  </Typography>
 
-                  <PathRow
-                    label="Log Output (stdout)"
-                    path={selectedProcess.pm2_env.pm_out_log_path}
-                    onOpen={() =>
-                      handleOpenLocation(
-                        selectedProcess.pm2_env.pm_out_log_path,
-                      )
-                    }
-                  />
-
-                  <PathRow
-                    label="Log Error (stderr)"
-                    path={selectedProcess.pm2_env.pm_err_log_path}
-                    onOpen={() =>
-                      handleOpenLocation(
-                        selectedProcess.pm2_env.pm_err_log_path,
-                      )
-                    }
-                  />
-                </Box>
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    startIcon={<RocketLaunch />}
+                    sx={{ mt: 3 }}
+                    disabled={deployLoading !== ''}
+                    onClick={() => {
+                      setSelectedDeploy(app.key);
+                      setOpenGitDialog(true);
+                    }}
+                  >
+                    {deployLoading === app.key ? 'Processing...' : 'Execute'}
+                  </Button>
+                </Paper>
               </Grid>
-            </Grid>
-          )}
+            ))}
+          </Grid>
+
+          <Divider sx={{ my: 3 }} />
+
+          <Typography variant="subtitle1" fontWeight="bold" mb={1}>
+            Deployment Logs
+          </Typography>
+
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 2,
+              bgcolor: '#111',
+              color: '#00ff90',
+              height: 250,
+              overflow: 'auto',
+              fontFamily: 'monospace',
+              fontSize: 13,
+            }}
+          >
+            {deployLogs.length === 0 ? (
+              <Typography variant="body2">No logs...</Typography>
+            ) : (
+              deployLogs.map((log, idx) => <Box key={idx}>{log}</Box>)
+            )}
+          </Paper>
         </DialogContent>
 
-        <DialogActions sx={{ p: 2, bgcolor: '#f5f5f5' }}>
-          <Button
-            onClick={() => setOpenDetailDialog(false)}
-            variant="contained"
-            disableElevation
-          >
-            Tutup
-          </Button>
+        <DialogActions>
+          <Button onClick={() => setDeployLogs([])}>Clear</Button>
+          <Button onClick={() => setOpenDeployDialog(false)}>Close</Button>
         </DialogActions>
       </Dialog>
+      <DialogGitAuthentication
+        open={openGitDialog}
+        onClose={() => setOpenGitDialog(false)}
+        gitForm={gitForm}
+        setGitForm={setGitForm}
+        loading={deployLoading !== ''}
+        onSubmit={async () => {
+          setOpenGitDialog(false);
+          await handleDeploy(selectedDeploy, gitForm);
+        }}
+      />
     </Box>
   );
 }
-const DetailItem = ({ label, value, color = 'text.primary' }) => (
-  <Box>
-    <Typography
-      variant="caption"
-      color="textSecondary"
-      sx={{ textTransform: 'uppercase', fontWeight: 600 }}
-    >
-      {label}
-    </Typography>
-    <Typography variant="body1" sx={{ color: color, fontWeight: 500 }}>
-      {value}
-    </Typography>
-  </Box>
-);
+
 const PathRow = ({ label, path, onOpen }) => (
   <Box sx={{ mb: 2 }}>
     <Box
       sx={{
         display: 'flex',
-        alignItems: 'center',
         justifyContent: 'space-between',
         mb: 0.5,
       }}
@@ -716,25 +690,20 @@ const PathRow = ({ label, path, onOpen }) => (
       >
         {label}
       </Typography>
-      <Button
-        size="small"
-        startIcon={<FolderOpen sx={{ fontSize: 16 }} />}
-        onClick={onOpen}
-        sx={{ py: 0, textTransform: 'none', fontSize: '0.75rem' }}
-      >
-        Buka Folder
+
+      <Button size="small" startIcon={<FolderOpen />} onClick={onOpen}>
+        Open Folder
       </Button>
     </Box>
+
     <Typography
       variant="body2"
       sx={{
         fontFamily: 'monospace',
-        bgcolor: '#ffffff',
+        bgcolor: '#fff',
         p: 1,
         borderRadius: 1,
         border: '1px dashed #ccc',
-        fontSize: '0.8rem',
-        wordBreak: 'break-all',
       }}
     >
       {path}

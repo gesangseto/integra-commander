@@ -86,9 +86,9 @@ export default function SideBar() {
       <Divider sx={{ bgcolor: '#555' }} />
 
       <Stack spacing={1} mt="auto">
-        {/* <Button sx={sxButton()} onClick={() => navigate('/setting')}>
+        <Button sx={sxButton()} onClick={() => navigate('/setting')}>
           <SettingsIcon fontSize="large" />
-        </Button> */}
+        </Button>
         <Button
           sx={{ ...sxButton(), backgroundColor: 'red' }}
           onClick={async () => {
