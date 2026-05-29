@@ -193,7 +193,7 @@ function SettingScreen() {
           <Grid item xs={12} md={6}>
             <TextField
               select
-              fullWidth
+              sx={{ minWidth: 250 }}
               label="Default Range Load Transaction"
               value={form.rangeTransaction || 'last_1_week'}
               onChange={(e) => handleChange('rangeTransaction', e.target.value)}

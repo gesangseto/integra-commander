@@ -40,11 +40,11 @@ import { useAlert } from '../AlertProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
 
 const DEPLOY_APPS = [
-  {
-    key: 'api_core_fresh',
-    title: 'Fresh Install Api Core Mertrack',
-    description: 'Install + Seeder + PM2',
-  },
+  // {
+  //   key: 'api_core_fresh',
+  //   title: 'Fresh Install Api Core Mertrack',
+  //   description: 'Install + Seeder + PM2',
+  // },
   {
     key: 'api_core_update',
     title: 'Update Api Core Mertrack',
