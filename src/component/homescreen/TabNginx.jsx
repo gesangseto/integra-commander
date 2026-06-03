@@ -680,7 +680,7 @@ export default function TabNginx() {
               bgcolor: '#111',
               color: '#00ff90',
               height: 250,
-              overflow: 'hidden',
+              overflow: 'auto',
               fontFamily: 'monospace',
               fontSize: 13,
             }}
@@ -697,7 +697,7 @@ export default function TabNginx() {
           <Button onClick={() => setDeployLogs([])}>Clear</Button>
           <Button onClick={() => setOpenDeployDialog(false)}>Close</Button>
         </DialogActions>
-      </Dialog>{' '}
+      </Dialog>
       <DialogGitAuthentication
         open={openGitDialog}
         onClose={() => setOpenGitDialog(false)}

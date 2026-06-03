@@ -40,18 +40,13 @@ import { useAlert } from '../AlertProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
 
 const DEPLOY_APPS = [
-  // {
-  //   key: 'api_core_fresh',
-  //   title: 'Fresh Install Api Core Mertrack',
-  //   description: 'Install + Seeder + PM2',
-  // },
   {
-    key: 'api_core_update',
+    key: 'API_CORE',
     title: 'Update Api Core Mertrack',
     description: 'Pull latest source & reload PM2',
   },
   {
-    key: 'bpom_api',
+    key: 'API_BPOM',
     title: 'Install / Update BPOM API',
     description: 'Deploy BPOM API service',
   },
@@ -195,21 +190,23 @@ export default function TabPm2() {
       if (type === 'logrotate') {
         serviceName = 'logrotate';
         return await deployLogRotate();
-      } else if (type === 'api_core_fresh' || type === 'api_core_update') {
+      } else if (type === 'API_CORE') {
         serviceName = setting.appName;
         gitUrl = 'https://gitlab.com/mertrack/mertrack-core';
       } else {
-        serviceName = 'BPOM-API';
+        serviceName = 'BPOM_API';
         gitUrl = 'https://gitlab.com/gesang/connector-bpom';
       }
       // =====================================================
       // HAPUS SERVICE DIR
       // =====================================================
-      appendLog('Cleaning service directory...');
-      await runCommand(
-        ['/C', 'rmdir', '/S', '/Q', serviceDir],
-        setting.workingDirectory,
-      );
+      if (serviceName !== 'BPOM_API') {
+        appendLog('Cleaning service directory...');
+        await runCommand(
+          ['/C', 'rmdir', '/S', '/Q', serviceDir],
+          setting.workingDirectory,
+        );
+      }
       // =====================================================
       // MEMBENTUK URL AUTHENTICATION GIT
       // =====================================================
@@ -221,8 +218,10 @@ export default function TabPm2() {
       // =====================================================
       // INSTALL NODE MODULES DI SERVICE PRODUCTION
       // =====================================================
-      appendLog('Installing production dependencies...');
-      await runCommand(['/C', 'npm', 'install', '--omit=dev'], serviceDir);
+      if (serviceName !== 'BPOM_API') {
+        appendLog('Installing production dependencies...');
+        await runCommand(['/C', 'npm', 'install', '--omit=dev'], serviceDir);
+      }
       // =====================================================
       // DEPLOY KE PM2
       // =====================================================
@@ -313,7 +312,7 @@ export default function TabPm2() {
       // =====================================================
       appendLog('Updating .env file...');
       let envField = {
-        APP_NAME: setting.appName,
+        APP_NAME: serviceName,
         APP_PORT: setting.backendPort,
         LOGIN_TIMEOUT: 15,
         DB_DIALECT: setting.databaseDialect,
@@ -337,7 +336,7 @@ export default function TabPm2() {
       // =====================================================
       appendLog('Updating package.json file...');
       const packageJson = JSON.parse(await readTextFile(packagePath));
-      packageJson.name = setting.appName;
+      packageJson.name = serviceName;
       await writeTextFile(packagePath, JSON.stringify(packageJson, null, 2));
       // =====================================================
       // INSTALL DEPENDENCIES DI TEMP FOLDER
@@ -554,7 +553,7 @@ export default function TabPm2() {
               bgcolor: '#111',
               color: '#00ff90',
               height: 250,
-              overflow: 'hidden',
+              overflow: 'auto',
               fontFamily: 'monospace',
               fontSize: 13,
             }}
