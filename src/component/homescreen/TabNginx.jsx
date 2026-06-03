@@ -193,15 +193,14 @@ export default function TabNginx() {
       console.log(args);
       const cmd = Command.create('run-command', args);
       const output = await cmd.execute();
-      if (output.code === 0) alert('Nginx Reload Success!');
+      if (output.code === 0) showAlert('Nginx reload Successfully.', 'success');
       else
-        alert(
-          'Gagal Reload. Pastikan nginx.exe sudah berjalan dan berada di PATH yang sesuai.',
+        showAlert(
+          'Failed to reload Nginx. Please ensure nginx.exe is running and located in the correct PATH.',
+          'error',
         );
-
-      console.log(output);
     } catch (err) {
-      alert('Error: ' + err);
+      showAlert(`${err}`, 'error');
     }
   };
 
@@ -345,26 +344,20 @@ export default function TabNginx() {
       await fetchNginxList();
       await reloadNginx();
       setOpenNginxForm(false);
-      alert('Konfigurasi berhasil disimpan!');
+      showAlert('Configuration has been saved successfully!.', 'success');
     } catch (err) {
-      alert(`Gagal: ${err}.`);
+      showAlert(`${err}`, 'error');
     }
   };
 
   const handleDeleteNginx = async (item) => {
-    console.log(item);
-
     if (!window.confirm(`Hapus konfigurasi ${item.name}?`)) return;
     try {
-      console.log(`${NGINX_CONF_DIR}\\${item.fileName}`);
-
       await remove(`${NGINX_CONF_DIR}\\${item.fileName}`);
       setNginxList(nginxList.filter((site) => site.id !== item.id));
       await reloadNginx();
     } catch (err) {
-      console.log(err);
-
-      alert('Gagal menghapus file .conf');
+      showAlert(`${err}`, 'error');
     }
   };
 
@@ -381,9 +374,9 @@ export default function TabNginx() {
       ]);
 
       cmd.execute();
-      alert('Nginx started successfully!');
+      showAlert('Nginx started successfully', 'success');
     } catch (err) {
-      alert('Error: ' + err);
+      showAlert(`${err}`, 'error');
     }
   };
   const handleStopNginx = async () => {
@@ -395,12 +388,12 @@ export default function TabNginx() {
       ]).execute();
 
       if (cmd.code === 0) {
-        alert('Nginx Berhasil Dihentikan!');
+        showAlert('Nginx stopped successfully', 'success');
       } else {
-        alert('Nginx memang sedang tidak berjalan.');
+        showAlert('Nginx has already stopped', 'success');
       }
     } catch (err) {
-      alert('Error Stop: ' + err);
+      showAlert(`${err}`, 'error');
     }
   };
   const initializeNginxConfig = async (nginxPath) => {
@@ -433,12 +426,17 @@ export default function TabNginx() {
           content.substring(lastIndex);
 
         await writeTextFile(mainConfPath, newContent);
-        alert('Nginx.conf berhasil di-patch! Folder sites-enabled diaktifkan.');
+        showAlert(
+          'nginx.conf has been patched successfully! The sites-enabled folder has been enabled.',
+          'success',
+        );
         return true;
       }
     } catch (err) {
-      console.error('Gagal inisialisasi Nginx:', err);
-      alert('Gagal mengedit nginx.conf. Pastikan path benar dan Run as Admin.');
+      showAlert(
+        `Failed to edit nginx.conf. Please ensure the path is correct and run the application as Administrator.\n${err}`,
+        'error',
+      );
       return false;
     }
   };

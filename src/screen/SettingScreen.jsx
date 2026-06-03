@@ -16,8 +16,10 @@ import { invoke } from '@tauri-apps/api/core';
 
 import { useSettingStore } from '../store/settingStore';
 import { useConfirm } from '../component/ConfirmProvider';
+import { useAlert } from '../component/AlertProvider';
 
 function SettingScreen() {
+  const { showAlert } = useAlert();
   const { confirm: showConfirm } = useConfirm();
   // ================= ZUSTAND =================
   const zustandForm = useSettingStore((state) => state.form);
@@ -80,8 +82,7 @@ function SettingScreen() {
   const handleSave = () => {
     // simpan ke zustand
     setForm(form);
-
-    console.log('Saved:', form);
+    showAlert('Saved successfully', 'success');
   };
 
   // ================= RESET =================
