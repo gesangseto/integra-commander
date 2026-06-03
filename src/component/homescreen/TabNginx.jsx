@@ -680,7 +680,7 @@ export default function TabNginx() {
               bgcolor: '#111',
               color: '#00ff90',
               height: 250,
-              overflow: 'auto',
+              overflow: 'hidden',
               fontFamily: 'monospace',
               fontSize: 13,
             }}

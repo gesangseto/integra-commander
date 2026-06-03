@@ -60,11 +60,13 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Box display="flex" height="100vh">
+      <Box display="flex" height="100vh" overflow="hidden">
         <SideBar />
-        <Box display="flex" flexDirection="column" flex={1}>
+
+        <Box display="flex" flexDirection="column" flex={1} overflow="hidden">
           <Header />
-          <Box flex={1}>
+
+          <Box flex={1} overflow="hidden" minHeight={0}>
             <Routes>
               <Route path="/" element={<HomeScreen user={user} />} />
               <Route path="/setting" element={<SettingScreen />} />

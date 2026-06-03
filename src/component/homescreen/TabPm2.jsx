@@ -83,14 +83,13 @@ export default function TabPm2() {
   const [deployLoading, setDeployLoading] = useState('');
   const [deployLogs, setDeployLogs] = useState([]);
 
-  const tempDir = `${setting.workingDirectory}\\integra\\temp`;
-  const serviceDir = `${setting.workingDirectory}\\integra\\service`;
+  const tempDir = `${setting.workingDirectory}\\Integra\\Temp`;
+  const serviceDir = `${setting.workingDirectory}\\Integra\\Service`;
+  const packagePath = `${tempDir}\\package.json`;
 
   useEffect(() => {
     fetchPm2List();
-
     const interval = setInterval(fetchPm2List, 10000);
-
     return () => clearInterval(interval);
   }, []);
 
@@ -204,26 +203,39 @@ export default function TabPm2() {
         gitUrl = 'https://gitlab.com/gesang/connector-bpom';
       }
       // =====================================================
+      // HAPUS SERVICE DIR
+      // =====================================================
+      appendLog('Cleaning service directory...');
+      await runCommand(
+        ['/C', 'rmdir', '/S', '/Q', serviceDir],
+        setting.workingDirectory,
+      );
+      // =====================================================
       // MEMBENTUK URL AUTHENTICATION GIT
       // =====================================================
-      // Menyisipkan username + password/token
-      // agar git clone private repository bisa berjalan
       const authUrl = gitUrl.replace(
         'https://',
         `https://${encodeURIComponent(gitForm.username)}:${encodeURIComponent(gitForm.password)}@`,
       );
       await buildBackend(authUrl, serviceName);
+      // =====================================================
+      // INSTALL NODE MODULES DI SERVICE PRODUCTION
+      // =====================================================
+      appendLog('Installing production dependencies...');
+      await runCommand(['/C', 'npm', 'install', '--omit=dev'], serviceDir);
+      // =====================================================
+      // DEPLOY KE PM2
+      // =====================================================
       await deployBackend(serviceName);
-
       // =====================================================
       // HAPUS TEMP DIRECTORY
       // =====================================================
       appendLog('Cleaning temp directory...');
-      // Hapus folder temp
       await runCommand(
         ['/C', 'rmdir', '/S', '/Q', tempDir],
         setting.workingDirectory,
       );
+      showAlert(`Success deploy`, 'success');
     } catch (err) {
       showAlert(`${err}`, 'error');
     } finally {
@@ -287,14 +299,11 @@ export default function TabPm2() {
       // =====================================================
       // MENENTUKAN DIRECTORY
       // =====================================================
-      // Folder hasil build
       const buildDir = `${tempDir}\\build`;
-      // Folder final service production
       // =====================================================
       // CLONE REPOSITORY
       // =====================================================
       appendLog('Cloning repository...');
-      // Clone latest source code
       await runCommand(
         ['/C', 'git', 'clone', '--depth', '1', url, tempDir],
         setting.workingDirectory,
@@ -302,7 +311,7 @@ export default function TabPm2() {
       // =====================================================
       // UPDATE FILE .ENV
       // =====================================================
-      // Variable environment yang akan diupdate
+      appendLog('Updating .env file...');
       let envField = {
         APP_NAME: setting.appName,
         APP_PORT: setting.backendPort,
@@ -313,56 +322,39 @@ export default function TabPm2() {
         DB_USER: setting.databaseUser,
         DB_PASSWORD: setting.databasePassword,
       };
-      appendLog('Updating .env file...');
-      // Path file .env
       const envPath = `${tempDir}\\.env`;
-      // Isi env existing
       let currentEnv = '';
       try {
-        // Membaca .env jika ada
         currentEnv = await readTextFile(envPath);
       } catch {
-        // Jika tidak ada maka buat baru
         appendLog('.env not found, creating new file...');
       }
-      // Loop semua envField lalu update/add ke .env
-      for (const key in envField) {
+      for (const key in envField)
         currentEnv = setEnvValue(currentEnv, key, envField[key] || '');
-      }
-      // Simpan hasil env terbaru
       await writeTextFile(envPath, currentEnv);
       // =====================================================
-      // INSTALL DEPENDENCIES
+      // UPDATE FILES PACKAGE.JSON
+      // =====================================================
+      appendLog('Updating package.json file...');
+      const packageJson = JSON.parse(await readTextFile(packagePath));
+      packageJson.name = setting.appName;
+      await writeTextFile(packagePath, JSON.stringify(packageJson, null, 2));
+      // =====================================================
+      // INSTALL DEPENDENCIES DI TEMP FOLDER
       // =====================================================
       appendLog('Installing dependencies...');
-      // npm install
       await runCommand(['/C', 'npm', 'install'], tempDir);
       // =====================================================
       // BUILD PROJECT
       // =====================================================
       appendLog('Building application...');
-      // npm run build
       await runCommand(['/C', 'npm', 'run', 'build'], tempDir);
       // =====================================================
       // COPY BUILD KE SERVICE PRODUCTION
       // =====================================================
       appendLog('Copying build to service...');
-      // Copy seluruh build ke folder service
       await runCommand(
         ['/C', 'xcopy', buildDir, serviceDir, '/E', '/I', '/Y'],
-        setting.workingDirectory,
-      );
-      // Copy seluruh node_module ke folder service
-      await runCommand(
-        [
-          '/C',
-          'xcopy',
-          `${tempDir}\\node_modules`,
-          `${serviceDir}\\node_modules`,
-          '/E',
-          '/I',
-          '/Y',
-        ],
         setting.workingDirectory,
       );
     } catch (err) {
@@ -394,6 +386,11 @@ export default function TabPm2() {
       return `${minutes}m ${seconds % 60}s`;
     }
     return `${seconds}s`;
+  };
+  const updatePackageJson = async (path, data) => {
+    const packageJson = JSON.parse(await readTextFile(path));
+    Object.assign(packageJson, data);
+    await writeTextFile(path, JSON.stringify(packageJson, null, 2));
   };
   return (
     <Box mt={2}>
@@ -557,7 +554,7 @@ export default function TabPm2() {
               bgcolor: '#111',
               color: '#00ff90',
               height: 250,
-              overflow: 'auto',
+              overflow: 'hidden',
               fontFamily: 'monospace',
               fontSize: 13,
             }}

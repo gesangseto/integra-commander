@@ -16,9 +16,9 @@
         "width": 800,
         "height": 600,
         "maximized": false,
-        "resizable": false,
+        "resizable": true,
         "decorations": true,
-        "fullscreen": true,
+        "fullscreen": false,
         "alwaysOnTop": false,
         "skipTaskbar": false,
         "visible": true
