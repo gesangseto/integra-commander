@@ -303,10 +303,27 @@ export default function TabPm2() {
       // CLONE REPOSITORY
       // =====================================================
       appendLog('Cloning repository...');
-      await runCommand(
-        ['/C', 'git', 'clone', '--depth', '1', url, tempDir],
-        setting.workingDirectory,
-      );
+      if (setting.backendBranch && serviceName !== 'BPOM_API') {
+        await runCommand(
+          [
+            '/C',
+            'git',
+            'clone',
+            '--depth',
+            '1',
+            '-b',
+            setting.backendBranch,
+            url,
+            tempDir,
+          ],
+          setting.workingDirectory,
+        );
+      } else {
+        await runCommand(
+          ['/C', 'git', 'clone', '--depth', '1', url, tempDir],
+          setting.workingDirectory,
+        );
+      }
       // =====================================================
       // UPDATE FILE .ENV
       // =====================================================

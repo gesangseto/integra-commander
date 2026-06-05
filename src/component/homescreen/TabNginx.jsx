@@ -241,12 +241,31 @@ export default function TabNginx() {
         'https://',
         `https://${encodeURIComponent(gitForm.username)}:${encodeURIComponent(gitForm.password)}@`,
       );
+      // =====================================================
+      // CLONE REPOSITORY
+      // =====================================================
       appendLog('Cloning repository...');
-      // Clone latest source code
-      await runCommand(
-        ['/C', 'git', 'clone', '--depth', '1', authUrl, tempDir],
-        setting.workingDirectory,
-      );
+      if (setting.frontendBranch) {
+        await runCommand(
+          [
+            '/C',
+            'git',
+            'clone',
+            '--depth',
+            '1',
+            '-b',
+            setting.frontendBranch,
+            url,
+            tempDir,
+          ],
+          setting.workingDirectory,
+        );
+      } else {
+        await runCommand(
+          ['/C', 'git', 'clone', '--depth', '1', url, tempDir],
+          setting.workingDirectory,
+        );
+      }
       // =====================================================
       // UPDATE FILE .ENV
       // =====================================================

@@ -12,7 +12,9 @@ export const useSettingStore = create(
         serverIp: '',
 
         backendPort: '',
+        backendBranch: '',
         frontendPort: '',
+        frontendBranch: '',
 
         databaseDialect: '',
         databasePort: '',
@@ -39,7 +41,9 @@ export const useSettingStore = create(
             serverIp: '',
 
             backendPort: '',
+            backendBranch: '',
             frontendPort: '',
+            frontendBranch: '',
 
             databaseDialect: '',
             databasePort: '',

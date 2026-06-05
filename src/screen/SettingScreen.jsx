@@ -56,6 +56,8 @@ function SettingScreen() {
 
   // ================= HANDLE CHANGE =================
   const handleChange = (key, value) => {
+    console.log(key, value);
+
     setLocalForm((prev) => ({
       ...prev,
       [key]: value,
@@ -176,12 +178,10 @@ function SettingScreen() {
                 }
               >
                 <MenuItem value="last_1_week">Last 1 Week</MenuItem>
-
                 <MenuItem value="last_month">Last Month</MenuItem>
-
                 <MenuItem value="last_3_month">Last 3 Month</MenuItem>
-
                 <MenuItem value="last_6_month">Last 6 Month</MenuItem>
+                <MenuItem value="all">All</MenuItem>
               </TextField>
             </Grid>
           </Grid>
@@ -267,7 +267,7 @@ function SettingScreen() {
 
         <Box sx={{ flexGrow: 1 }}>
           <Grid container spacing={2}>
-            <Grid size={6}>
+            <Grid size={2}>
               <TextField
                 size="small"
                 fullWidth
@@ -280,7 +280,19 @@ function SettingScreen() {
                 }}
               />
             </Grid>
-            <Grid size={6}>
+            <Grid size={3}>
+              <TextField
+                size="small"
+                fullWidth
+                label="Branch Backend"
+                placeholder="Default"
+                helperText="Leave blank for default branch"
+                value={form.backendBranch || ''}
+                onChange={(e) => handleChange('backendBranch', e.target.value)}
+              />
+            </Grid>
+            <Grid size={2}></Grid>
+            <Grid size={2}>
               <TextField
                 size="small"
                 fullWidth
@@ -288,9 +300,19 @@ function SettingScreen() {
                 value={form.frontendPort || ''}
                 onChange={(e) => {
                   const value = e.target.value.replace(/[^0-9]/g, '');
-
                   handleChange('frontendPort', value);
                 }}
+              />
+            </Grid>
+            <Grid size={3}>
+              <TextField
+                size="small"
+                fullWidth
+                label="Branch Frontend"
+                placeholder="Default"
+                helperText="Leave blank for default branch"
+                value={form.frontendBranch || ''}
+                onChange={(e) => handleChange('frontendBranch', e.target.value)}
               />
             </Grid>
           </Grid>

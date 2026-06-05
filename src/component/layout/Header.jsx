@@ -3,7 +3,6 @@ import { Box, Grid, keyframes, Paper } from '@mui/material';
 import { Command } from '@tauri-apps/plugin-shell';
 import { useEffect } from 'react';
 import mertrackLogo from '../../assets/mertrack.png';
-import '../../css/layout/Header.css';
 import { useAppStore } from '../../store/pathStore';
 
 const blinkRed = keyframes`
