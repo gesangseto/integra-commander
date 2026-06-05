@@ -5,6 +5,7 @@ import {
   Refresh,
   RocketLaunch,
   Stop,
+  Article,
 } from '@mui/icons-material';
 
 import {
@@ -31,7 +32,7 @@ import {
 } from '@mui/material';
 import { CircularProgress } from '@mui/material';
 import { useEffect, useState } from 'react';
-
+import Pm2LogViewer from '../Pm2LogViewer';
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
 
@@ -73,6 +74,7 @@ export default function TabPm2() {
   const [envContent, setEnvContent] = useState('');
   const [currentEnvPath, setCurrentEnvPath] = useState('');
   const [activeAppName, setActiveAppName] = useState('');
+  const [openLogViewer, setOpenLogViewer] = useState(false);
   const [selectedProcess, setSelectedProcess] = useState(null);
 
   const [deployLoading, setDeployLoading] = useState('');
@@ -466,10 +468,13 @@ export default function TabPm2() {
                 <TableCell align="center">
                   <Tooltip title="Monitor CMD">
                     <IconButton
-                      color="secondary"
-                      onClick={() => handleOpenExternalMonit(proc.pm_id)}
+                      color="info"
+                      onClick={() => {
+                        setSelectedProcess(proc);
+                        setOpenLogViewer(true);
+                      }}
                     >
-                      <MonitorHeart />
+                      <Article />
                     </IconButton>
                   </Tooltip>
 
@@ -612,6 +617,11 @@ export default function TabPm2() {
         <CircularProgress color="inherit" />
         <Typography variant="h6">Processing...</Typography>
       </Backdrop>
+      <Pm2LogViewer
+        open={openLogViewer}
+        onClose={() => setOpenLogViewer(false)}
+        process={selectedProcess}
+      />
     </Box>
   );
 }
