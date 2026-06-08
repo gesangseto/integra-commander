@@ -60,26 +60,28 @@ export default function Pm2LogViewer({ open, onClose, process }) {
           '200',
           '--nostream',
         ]).execute();
-
         const content = `${result.stdout || ''}\n${result.stderr || ''}`;
-
         const lines = content.split(/\r?\n/).filter((v) => v.trim() !== '');
-
         setLogs(lines);
       } catch (err) {
         setLogs([`ERROR: ${err}`]);
       }
     };
-
     loadLogs();
-
     // refresh tiap 2 detik
     interval = setInterval(loadLogs, 2000);
-
     return () => {
       clearInterval(interval);
     };
   }, [open, process]);
+
+  const stripAnsi = (text = '') => {
+    return text.replace(
+      // eslint-disable-next-line no-control-regex
+      /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g,
+      '',
+    );
+  };
 
   return (
     <Dialog
@@ -228,7 +230,7 @@ export default function Pm2LogViewer({ open, onClose, process }) {
                   wordBreak: 'break-word',
                 }}
               >
-                {line}
+                {stripAnsi(line)}
               </Typography>
             ))
           )}
