@@ -53,26 +53,33 @@ fn main() {
             thread::spawn(move || {
                 let mut sys = System::new_all();
                 loop {
-                    // 1. Refresh CPU & Memory
                     sys.refresh_cpu_all();
                     sys.refresh_memory();
-                    // 2. Refresh Storage
                     let disks = Disks::new_with_refreshed_list();
                     let mut storage_percentage = 0.0;
                     if let Some(disk) = disks.iter().next() {
                         let total = disk.total_space();
                         let used = total - disk.available_space();
                         if total > 0 {
-                            storage_percentage = (used as f64 / total as f64) * 100.0;
+                            storage_percentage =
+                                (used as f64 / total as f64) * 100.0;
                         }
                     }
-                    // 3. EMIT DATA ke Frontend
-                    let _ = handle.emit("sys-stats", serde_json::json!({
-                        "cpu": sys.global_cpu_usage(),
-                        "memory": (sys.used_memory() as f64 / sys.total_memory() as f64) * 100.0,
-                        "storage": storage_percentage,
-                    }));
-                    // 4. Jeda 2 detik
+                    let total_memory_mb = sys.total_memory() as f64 / 1024.0 / 1024.0;
+                    let used_memory_mb = sys.used_memory() as f64 / 1024.0 / 1024.0;
+                    let memory_percentage = (used_memory_mb / total_memory_mb) * 100.0;
+
+                    let _ = handle.emit(
+                        "sys-stats",
+                        serde_json::json!({
+                            "cpu": sys.global_cpu_usage(),
+                            "memory": memory_percentage,
+                            "storage": storage_percentage,
+                            // tambahan
+                            "totalMemoryMB": total_memory_mb,
+                            "usedMemoryMB": used_memory_mb
+                        }),
+                    );
                     thread::sleep(Duration::from_secs(10));
                 }
             });

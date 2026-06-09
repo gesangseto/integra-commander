@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 
 import {
-  Delete,
   Folder,
   FolderOpen,
   PlayArrow,
@@ -44,10 +43,10 @@ import {
 } from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
 import { useAppStore } from '../../store/pathStore'; // Sesuaikan path file store Anda
+import { useSettingStore } from '../../store/settingStore';
 import { openLocation } from '../../utility';
 import { useAlert } from '../AlertProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
-import { useSettingStore } from '../../store/settingStore';
 
 const DEPLOY_APPS = [
   {
@@ -430,7 +429,6 @@ export default function TabNginx() {
 
       // 3. Cek apakah sudah ada include sites-enabled
       if (content.includes('include sites-enabled/*.conf;')) {
-        console.log('Konfigurasi sudah benar.');
         return true;
       }
 
