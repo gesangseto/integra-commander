@@ -123,3 +123,13 @@ export async function getDatabaseStatus(process = 'sqlservr.exe') {
   };
   return res.memoryMB;
 }
+export async function runCommand(args, cwd) {
+  const cmd = Command.create('run-command', args, { cwd });
+  const output = await cmd.execute();
+  if (output.code !== 0) {
+    throw new Error(
+      output.stderr || output.stdout || `Command failed (${output.code})`,
+    );
+  }
+  return output;
+}

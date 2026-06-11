@@ -47,6 +47,7 @@ import { useSettingStore } from '../../store/settingStore';
 import { openLocation } from '../../utility';
 import { useAlert } from '../AlertProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
+import { gitCloneFe } from '../../utility/gitUtility';
 
 const DEPLOY_APPS = [
   {
@@ -217,53 +218,21 @@ export default function TabNginx() {
       // =====================================================
       // START DEPLOYMENT
       // =====================================================
-      // Menandai deploy sedang berjalan
       setDeployLoading(type);
-      // Reset log deployment sebelumnya
       setDeployLogs([]);
-      // Tambahkan log awal
       appendLog('Starting deployment...');
-
-      // =====================================================
-      // MENENTUKAN NAMA SERVICE dan url git
-      // =====================================================
-      // Tentukan nama PM2 service berdasarkan type deployment
-      let serviceName = '';
-      let gitUrl = 'https://gitlab.com/mertrack/mertrack_frontend';
-
-      // =====================================================
-      // MEMBENTUK URL AUTHENTICATION GIT
-      // =====================================================
-      // Menyisipkan username + password/token
-      // agar git clone private repository bisa berjalan
-      const authUrl = gitUrl.replace(
-        'https://',
-        `https://${encodeURIComponent(gitForm.username)}:${encodeURIComponent(gitForm.password)}@`,
-      );
       // =====================================================
       // CLONE REPOSITORY
       // =====================================================
       appendLog('Cloning repository...');
       if (setting.frontendBranch) {
-        await runCommand(
-          [
-            '/C',
-            'git',
-            'clone',
-            '--depth',
-            '1',
-            '-b',
-            setting.frontendBranch,
-            url,
-            tempDir,
-          ],
-          setting.workingDirectory,
-        );
+        await gitCloneFe({
+          ...gitForm,
+          directory: tempDir,
+          branch: setting.frontendBranch,
+        });
       } else {
-        await runCommand(
-          ['/C', 'git', 'clone', '--depth', '1', url, tempDir],
-          setting.workingDirectory,
-        );
+        await gitCloneFe({ ...gitForm, directory: tempDir });
       }
       // =====================================================
       // UPDATE FILE .ENV
@@ -291,31 +260,21 @@ export default function TabNginx() {
       }
       // Simpan hasil env terbaru
       await writeTextFile(envPath, currentEnv);
-
       // =====================================================
       // INSTALL DEPENDENCIES
       // =====================================================
       appendLog('Installing dependencies...');
-      // npm install
       await runCommand(['/C', 'npm', 'install'], tempDir);
-
       // =====================================================
       // BUILD PROJECT
       // =====================================================
       appendLog('Building application...');
       // npm run build
       await runCommand(['/C', 'npm', 'run', 'build'], tempDir);
-
-      // =====================================================
-      // COPY BUILD KE SERVICE PRODUCTION
-      // Tidak perlu copy karen hasil build otomatis menjadi ../public
-      // =====================================================
-
       // =====================================================
       // UPDATE NGINX ACTIVE SITES
       // =====================================================
       await handleSaveNginx();
-
       // =====================================================
       // HAPUS TEMP DIRECTORY
       // =====================================================
@@ -329,8 +288,11 @@ export default function TabNginx() {
       showAlert(`${err}`, 'error');
     } finally {
       setDeployLoading('');
+      showAlert(`Deployment success`, 'success');
+      appendLog('Done deployment process');
     }
   };
+
   const handleSaveNginx = async () => {
     try {
       // 1. Pastikan folder NGINX_CONF_DIR tersedia

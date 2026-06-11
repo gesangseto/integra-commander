@@ -11,26 +11,27 @@ import {
   MenuItem,
 } from '@mui/material';
 
+import DialogGitAuthentication from '../component/DialogGitAuthentication';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 
 import { useSettingStore } from '../store/settingStore';
 import { useConfirm } from '../component/ConfirmProvider';
 import { useAlert } from '../component/AlertProvider';
+import { gitValidation } from '../utility/gitUtility';
 
 function SettingScreen() {
   const { showAlert } = useAlert();
   const { confirm: showConfirm } = useConfirm();
   // ================= ZUSTAND =================
   const zustandForm = useSettingStore((state) => state.form);
-
   const setForm = useSettingStore((state) => state.setForm);
-
   const resetStore = useSettingStore((state) => state.resetForm);
-
   // ================= LOCAL FORM =================
   const [form, setLocalForm] = useState(zustandForm);
-
+  const [gitForm, setGitForm] = useState({ username: '', password: '' });
+  const [isLoading, setIsLoading] = useState(false);
+  const [openGitDialog, setOpenGitDialog] = useState(false);
   // ================= LOAD IP =================
   useEffect(() => {
     if (!form.serverIp) {
@@ -104,6 +105,24 @@ function SettingScreen() {
         boxSizing: 'border-box',
       }}
     >
+      <DialogGitAuthentication
+        open={openGitDialog}
+        onClose={() => setOpenGitDialog(false)}
+        gitForm={gitForm}
+        setGitForm={setGitForm}
+        loading={isLoading}
+        onSubmit={async () => {
+          setIsLoading(true);
+          let validasi = await gitValidation(gitForm);
+          if (!validasi.error) {
+            handleSave();
+            setOpenGitDialog(false);
+          } else {
+            showAlert(validasi.message, 'error');
+          }
+          setIsLoading(false);
+        }}
+      />
       {/* ========================================================= */}
       {/* ================= APPLICATION =========================== */}
       {/* ========================================================= */}
@@ -255,7 +274,6 @@ function SettingScreen() {
           </Grid>
         </Box>
       </Box>
-
       {/* ========================================================= */}
       {/* ================= BACKEND =============================== */}
       {/* ========================================================= */}
@@ -321,14 +339,13 @@ function SettingScreen() {
           <Grid item xs={12} md={6}></Grid>
         </Grid>
       </Box>
-
       {/* ========================================================= */}
       {/* ================= ACTION ================================ */}
       {/* ========================================================= */}
       <Box mt={5} display="flex" justifyContent="flex-end" gap={2}>
-        <Button variant="outlined" onClick={handleReset}>
+        {/* <Button variant="outlined" onClick={handleReset}>
           Reset
-        </Button>
+        </Button> */}
 
         <Button
           variant="contained"
@@ -339,7 +356,7 @@ function SettingScreen() {
               severity: 'danger',
             });
             if (ok) {
-              handleSave();
+              setOpenGitDialog(true);
             }
           }}
         >

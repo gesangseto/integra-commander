@@ -39,6 +39,7 @@ import { Command } from '@tauri-apps/plugin-shell';
 import { useSettingStore } from '../../store/settingStore';
 import { useAlert } from '../AlertProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
+import { gitCloneBe, gitCloneBpom } from '../../utility/gitUtility';
 
 const DEPLOY_APPS = [
   {
@@ -236,11 +237,12 @@ export default function TabPm2() {
         ['/C', 'rmdir', '/S', '/Q', tempDir],
         setting.workingDirectory,
       );
-      showAlert(`Success deploy`, 'success');
     } catch (err) {
       showAlert(`${err}`, 'error');
     } finally {
       setDeployLoading('');
+      showAlert(`Deployment success`, 'success');
+      appendLog('Done deployment process');
     }
   };
 
@@ -305,26 +307,15 @@ export default function TabPm2() {
       // CLONE REPOSITORY
       // =====================================================
       appendLog('Cloning repository...');
-      if (setting.backendBranch && serviceName !== 'BPOM_API') {
-        await runCommand(
-          [
-            '/C',
-            'git',
-            'clone',
-            '--depth',
-            '1',
-            '-b',
-            setting.backendBranch,
-            url,
-            tempDir,
-          ],
-          setting.workingDirectory,
-        );
+      let param = { ...gitForm, directory: tempDir };
+      if (serviceName == 'BPOM_API') {
+        await gitCloneBpom(param);
       } else {
-        await runCommand(
-          ['/C', 'git', 'clone', '--depth', '1', url, tempDir],
-          setting.workingDirectory,
-        );
+        if (setting.backendBranch) {
+          await gitCloneBe({ ...param, branch: setting.backendBranch });
+        } else {
+          await gitCloneBe({ ...param });
+        }
       }
       // =====================================================
       // UPDATE FILE .ENV

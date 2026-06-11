@@ -57,7 +57,7 @@ function DialogGitAuthentication({
         </Button>
 
         <Button variant="contained" onClick={onSubmit} disabled={loading}>
-          {loading ? 'Processing...' : 'Execute Deployment'}
+          {loading ? 'Processing...' : 'Execute'}
         </Button>
       </DialogActions>
     </Dialog>
