@@ -26,6 +26,8 @@ IP_MERTRACK_BE=$(get_var_value "IP_MERTRACK_BE")
 DATABASE_NAME=$(get_var_value "DATABASE_NAME")
 DATABASE_USERNAME=$(get_var_value "DATABASE_USERNAME")
 DATABASE_PASSWORD=$(get_var_value "DATABASE_PASSWORD")
+DATABASE_DIALECT=$(get_var_value "DATABASE_DIALECT")
+DATABASE_PORT=$(get_var_value "DATABASE_PORT")
 
 APP_NAME="API_CORE_MERTRACK"
 
@@ -41,37 +43,27 @@ as_user() {
     # Flag -i memastikan .bashrc/.profile di-load
     sudo -u "$REAL_USER" bash -i -c "$1"
 }
-
 update_env_backend() {
     local ENV_FILE="$1"
     echo "🔧 Updating .env: $ENV_FILE"
-
-    # Pastikan file ada agar tidak error saat sed
     touch "$ENV_FILE"
-
-    # Fungsi pembantu untuk update atau insert
     update_or_append() {
         local key=$1
         local value=$2
         if grep -q "^$key=" "$ENV_FILE"; then
-            # Jika kunci ada, replace nilainya
             sed -i "s|^$key=.*|$key=$value|" "$ENV_FILE"
         else
-            # Jika kunci tidak ada, tambah ke baris baru
             echo "$key=$value" >> "$ENV_FILE"
         fi
     }
-
-    # Jalankan update untuk masing-masing variabel
     update_or_append "APP_PORT" "$PORT_MERTRACK_BE"
+    update_or_append "DB_DIALECT" "$DATABASE_DIALECT"
+    update_or_append "DB_HOST" "127.0.0.1"
+    update_or_append "DB_PORT" "$DATABASE_PORT"
     update_or_append "DB_DATABASE" "$DATABASE_NAME"
     update_or_append "DB_USER" "$DATABASE_USERNAME"
     update_or_append "DB_PASSWORD" "$DATABASE_PASSWORD"
     update_or_append "NODE_ENV" "production"
-    
-    # Tambahkan DB_HOST jika Sequelize masih minta (opsional tapi disarankan)
-    update_or_append "DB_HOST" "127.0.0.1"
-
     chown "$REAL_USER":"$REAL_USER" "$ENV_FILE"
 }
 

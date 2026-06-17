@@ -34,12 +34,14 @@ set_env() {
 
 # Variable names
 VAR_PATH="PATH_MERTRACK"
+VAR_IP_BE="IP_MERTRACK_BE"
 VAR_PORT_BE="PORT_MERTRACK_BE"
 VAR_PORT_FE="PORT_MERTRACK_FE"
-VAR_IP_BE="IP_MERTRACK_BE"
 VAR_DATABASE_NAME="DATABASE_NAME"
 VAR_DATABASE_USERNAME="DATABASE_USERNAME"
 VAR_DATABASE_PASSWORD="DATABASE_PASSWORD"
+VAR_DATABASE_DIALECT="DATABASE_DIALECT"
+VAR_DATABASE_PORT="DATABASE_PORT"
 
 while true; do
     # Ambil nilai terbaru
@@ -50,6 +52,8 @@ while true; do
     VALUE_DATABASE_NAME=$(get_var_value "$VAR_DATABASE_NAME")
     VALUE_DATABASE_USERNAME=$(get_var_value "$VAR_DATABASE_USERNAME")
     VALUE_DATABASE_PASSWORD=$(get_var_value "$VAR_DATABASE_PASSWORD")
+    VALUE_DATABASE_DIALECT=$(get_var_value "$VAR_DATABASE_DIALECT")
+    VALUE_DATABASE_PORT=$(get_var_value "$VAR_DATABASE_PORT")
 
     clear
     echo "===== ⚙️ Configuration Mertrack (User: $REAL_USER) ====="
@@ -62,6 +66,8 @@ while true; do
     echo "5) ${VALUE_DATABASE_NAME:+Edit} DB Name            : ${VALUE_DATABASE_NAME:-not set}"
     echo "6) ${VALUE_DATABASE_USERNAME:+Edit} DB User            : ${VALUE_DATABASE_USERNAME:-not set}"
     echo "7) ${VALUE_DATABASE_PASSWORD:+Edit} DB Password        : ${VALUE_DATABASE_PASSWORD:+[SET]}"
+    echo "8) ${VALUE_DATABASE_DIALECT:+Edit} DB Dialect         : ${VALUE_DATABASE_DIALECT:-not set}"
+    echo "9) ${VALUE_DATABASE_PORT:+Edit} DB Port            : ${VALUE_DATABASE_PORT:-not set}"
     echo "===================================================="
     echo "Tekan tombol lain untuk kembali/keluar"
     read -p "Masukkan pilihan: " CHOICE
@@ -116,6 +122,18 @@ while true; do
             echo ""
             set_env "$VAR_DATABASE_PASSWORD" "$VALUE"
             echo "✅ Password tersimpan."
+        ;;
+         
+        8)
+            DEFAULT=${VALUE_DATABASE_DIALECT:-mssql}
+            read -p "Database Dialect (mssql/postgres): " INPUT
+            set_env "$VAR_DATABASE_DIALECT" "${INPUT:-$DEFAULT}"
+        ;;
+
+        9)
+            DEFAULT=${VALUE_DATABASE_PORT:-1433}
+            read -p "Database Port: " INPUT
+            set_env "$VAR_DATABASE_PORT" "${INPUT:-$DEFAULT}"
         ;;
 
         *)

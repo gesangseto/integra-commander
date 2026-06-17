@@ -1,10 +1,16 @@
-Development: npm run tauri dev
-Build to exe: npm run tauri build
+## Runing App
 
-# Tauri + React
+Development: $ npm run tauri dev
+Build to exe: $ npm run tauri build
 
-This template should help get you started developing with Tauri and React in Vite.
+## Clean Tauri
 
-## Recommended IDE Setup
+$ cd src-tauri && cargo clean
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## Ganti ICON
+
+Install Tauri CLI globally atau sebagai dev dependency
+$ npm install -D @tauri-apps/cli
+
+Atau jika sudah terinstall, langsung gunakan:
+$ npx @tauri-apps/cli icon path/to/your/icon.png
