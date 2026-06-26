@@ -10,6 +10,7 @@ export const useSettingStore = create(
         loginTimeout: '',
         rangeTransaction: 'last_1_week',
         serverIp: '',
+        timezone: 'Asia/Jakarta',
 
         backendPort: '',
         backendBranch: '',
@@ -21,6 +22,10 @@ export const useSettingStore = create(
         databaseName: '',
         databaseUser: '',
         databasePassword: '',
+
+        bpomEmail: '',
+        bpomPassword: '',
+        bpomUrl: 'https://ttacdev.pom.go.id/dev/public/api/v3/',
       },
 
       setForm: (data) =>
@@ -39,6 +44,7 @@ export const useSettingStore = create(
             loginTimeout: '',
             rangeTransaction: 'last_1_week',
             serverIp: '',
+            timezone: 'Asia/Jakarta',
 
             backendPort: '',
             backendBranch: '',
@@ -50,6 +56,10 @@ export const useSettingStore = create(
             databaseName: '',
             databaseUser: '',
             databasePassword: '',
+
+            bpomEmail: '',
+            bpomPassword: '',
+            bpomUrl: '',
           },
         }),
     }),

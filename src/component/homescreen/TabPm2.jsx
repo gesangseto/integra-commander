@@ -324,12 +324,18 @@ export default function TabPm2() {
       let envField = {
         APP_NAME: serviceName,
         APP_PORT: setting.backendPort,
+        APP_TIMEZONE: setting.timezone,
+
         LOGIN_TIMEOUT: 15,
         DB_DIALECT: setting.databaseDialect,
         DB_PORT: setting.databasePort,
         DB_DATABASE: setting.databaseName,
         DB_USER: setting.databaseUser,
         DB_PASSWORD: setting.databasePassword,
+
+        BPOM_URL: setting.bpomUrl,
+        BPOM_EMAIL: setting.bpomEmail,
+        BPOM_PASSWORD: setting.bpomPassword,
       };
       const envPath = `${tempDir}\\.env`;
       let currentEnv = '';

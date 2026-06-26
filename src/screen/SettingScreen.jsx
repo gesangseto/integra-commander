@@ -20,6 +20,107 @@ import { useConfirm } from '../component/ConfirmProvider';
 import { useAlert } from '../component/AlertProvider';
 import { gitValidation } from '../utility/gitUtility';
 
+const listTimezone = [
+  { offset: '-11:00', name: 'Pacific/Midway', label: '(GMT-11:00) Midway' },
+  { offset: '-10:00', name: 'America/Adak', label: '(GMT-10:00) Adak' },
+  { offset: '-10:00', name: 'Pacific/Honolulu', label: '(GMT-10:00) Honolulu' },
+  {
+    offset: '-09:00',
+    name: 'America/Anchorage',
+    label: '(GMT-09:00) Anchorage',
+  },
+  {
+    offset: '-08:00',
+    name: 'America/Los_Angeles',
+    label: '(GMT-08:00) Pacific Time',
+  },
+  {
+    offset: '-07:00',
+    name: 'America/Denver',
+    label: '(GMT-07:00) Mountain Time',
+  },
+  {
+    offset: '-06:00',
+    name: 'America/Chicago',
+    label: '(GMT-06:00) Central Time',
+  },
+  {
+    offset: '-05:00',
+    name: 'America/New_York',
+    label: '(GMT-05:00) Eastern Time',
+  },
+  {
+    offset: '-04:00',
+    name: 'America/Halifax',
+    label: '(GMT-04:00) Atlantic Time',
+  },
+  {
+    offset: '-03:00',
+    name: 'America/Buenos_Aires',
+    label: '(GMT-03:00) Buenos Aires',
+  },
+  { offset: '-01:00', name: 'Atlantic/Azores', label: '(GMT-01:00) Azores' },
+  {
+    offset: '+00:00',
+    name: 'Europe/London',
+    label: '(GMT+00:00) London, Dublin',
+  },
+  {
+    offset: '+01:00',
+    name: 'Europe/Paris',
+    label: '(GMT+01:00) Paris, Berlin, Rome',
+  },
+  {
+    offset: '+02:00',
+    name: 'Europe/Cairo',
+    label: '(GMT+02:00) Cairo, Athens',
+  },
+  {
+    offset: '+03:00',
+    name: 'Europe/Moscow',
+    label: '(GMT+03:00) Moscow, Baghdad',
+  },
+  {
+    offset: '+04:00',
+    name: 'Asia/Dubai',
+    label: '(GMT+04:00) Dubai, Abu Dhabi',
+  },
+  {
+    offset: '+05:30',
+    name: 'Asia/Kolkata',
+    label: '(GMT+05:30) Mumbai, New Delhi',
+  },
+  {
+    offset: '+07:00',
+    name: 'Asia/Jakarta',
+    label: '(GMT+07:00) Jakarta, Bangkok',
+  },
+  {
+    offset: '+08:00',
+    name: 'Asia/Singapore',
+    label: '(GMT+08:00) Singapore, Beijing',
+  },
+  { offset: '+09:00', name: 'Asia/Tokyo', label: '(GMT+09:00) Tokyo, Seoul' },
+  { offset: '+09:30', name: 'Australia/Darwin', label: '(GMT+09:30) Darwin' },
+  {
+    offset: '+10:00',
+    name: 'Australia/Sydney',
+    label: '(GMT+10:00) Sydney, Melbourne',
+  },
+  {
+    offset: '+12:00',
+    name: 'Pacific/Auckland',
+    label: '(GMT+12:00) Auckland, Fiji',
+  },
+];
+
+const listBpomUrl = [
+  { value: 'https://ttac.pom.go.id/api/v3/', label: 'BPOM Live' },
+  {
+    value: 'https://ttacdev.pom.go.id/dev/public/api/v3/',
+    label: 'BPOM Development',
+  },
+];
 function SettingScreen() {
   const { showAlert } = useAlert();
   const { confirm: showConfirm } = useConfirm();
@@ -57,8 +158,6 @@ function SettingScreen() {
 
   // ================= HANDLE CHANGE =================
   const handleChange = (key, value) => {
-    console.log(key, value);
-
     setLocalForm((prev) => ({
       ...prev,
       [key]: value,
@@ -132,7 +231,7 @@ function SettingScreen() {
         </Typography>
         <Box>
           <Grid container spacing={2}>
-            <Grid size={6}>
+            <Grid size={4}>
               <TextField
                 size="small"
                 fullWidth
@@ -145,7 +244,7 @@ function SettingScreen() {
                 }}
               />
             </Grid>
-            <Grid size={6}>
+            <Grid size={4}>
               <TextField
                 size="small"
                 fullWidth
@@ -154,7 +253,7 @@ function SettingScreen() {
                 onChange={(e) => handleChange('serverIp', e.target.value)}
               />
             </Grid>
-            <Grid size={6}>
+            <Grid size={4}>
               <TextField
                 size="small"
                 fullWidth
@@ -167,7 +266,7 @@ function SettingScreen() {
                 }}
               />
             </Grid>
-            <Grid size={6} sx={{ display: 'flex', gap: 1 }}>
+            <Grid size={4} sx={{ display: 'flex', gap: 1 }}>
               <TextField
                 size="small"
                 fullWidth
@@ -185,7 +284,7 @@ function SettingScreen() {
                 Browse
               </Button>
             </Grid>
-            <Grid size={6}>
+            <Grid size={4}>
               <TextField
                 size="small"
                 select
@@ -202,6 +301,76 @@ function SettingScreen() {
                 <MenuItem value="last_6_month">Last 6 Month</MenuItem>
                 <MenuItem value="all">All</MenuItem>
               </TextField>
+            </Grid>
+            <Grid size={4}>
+              <TextField
+                size="small"
+                select
+                fullWidth
+                label="Timezone"
+                value={form.timezone || 'Asia/Jakarta'}
+                onChange={(e) => handleChange('timezone', e.target.value)}
+              >
+                {listTimezone.map((tz) => (
+                  <MenuItem key={tz.name} value={tz.name}>
+                    {tz.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+          </Grid>
+        </Box>
+      </Box>
+      {/* ========================================================= */}
+      {/* ================= BPOM CONFIG =========================== */}
+      {/* ========================================================= */}
+      <Box mt={3}>
+        <Typography variant="h6" fontWeight="bold" mb={2}>
+          BPOM Config
+        </Typography>
+        <Box>
+          <Grid container spacing={2}>
+            <Grid size={4}>
+              <TextField
+                size="small"
+                select
+                fullWidth
+                label="Target"
+                value={
+                  form.bpomUrl || 'https://ttacdev.pom.go.id/dev/public/api/v3/'
+                }
+                onChange={(e) => handleChange('bpomUrl', e.target.value)}
+              >
+                {listBpomUrl.map((tz) => (
+                  <MenuItem key={tz.value} value={tz.value}>
+                    {tz.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid size={4}>
+              <TextField
+                size="small"
+                fullWidth
+                label="BPOM Email"
+                type="email"
+                value={form.bpomEmail || ''}
+                helperText="Tidak boleh menggunakan spasi"
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\s/g, '');
+                  handleChange('bpomEmail', value);
+                }}
+              />
+            </Grid>
+            <Grid size={4}>
+              <TextField
+                size="small"
+                fullWidth
+                type="password"
+                label="BPOM Password"
+                value={form.bpomPassword || ''}
+                onChange={(e) => handleChange('bpomPassword', e.target.value)}
+              />
             </Grid>
           </Grid>
         </Box>
