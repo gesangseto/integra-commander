@@ -76,8 +76,8 @@ export default function TabNginx() {
   const [openNginxForm, setOpenNginxForm] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
 
-  const tempDir = `${setting.workingDirectory}\\integra\\temp`;
-  const serviceDir = `${setting.workingDirectory}\\integra\\public`;
+  const tempDir = `${setting.workingDirectory}\\temp`;
+  const serviceDir = `${setting.workingDirectory}\\public`;
 
   const [nginxForm, setNginxForm] = useState({
     id: null,
@@ -166,8 +166,6 @@ export default function TabNginx() {
       });
 
       if (selected) {
-        console.log(selected);
-
         // Simpan path baru ke Zustand (otomatis tersimpan ke LocalStorage)
         setNginxPath(selected);
       }
@@ -190,7 +188,6 @@ export default function TabNginx() {
   const reloadNginx = async () => {
     try {
       let args = ['/C', 'nginx', '-p', nginxPath, '-s', 'reload'];
-      console.log(args);
       const cmd = Command.create('run-command', args);
       const output = await cmd.execute();
       if (output.code === 0) showAlert('Nginx reload Successfully.', 'success');

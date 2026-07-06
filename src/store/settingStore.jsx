@@ -29,42 +29,45 @@ export const useSettingStore = create(
       },
 
       setForm: (data) =>
-        set((state) => ({
-          form: {
+        set((state) => {
+          const newForm = {
             ...state.form,
             ...data,
-          },
-        })),
-
-      resetForm: () =>
-        set({
-          form: {
-            appName: 'API_CORE_MERTRACK',
-            workingDirectory: '',
-            loginTimeout: '',
-            rangeTransaction: 'last_1_week',
-            serverIp: '',
-            timezone: 'Asia/Jakarta',
-
-            backendPort: '',
-            backendBranch: '',
-            frontendPort: '',
-            frontendBranch: '',
-
-            databaseDialect: '',
-            databasePort: '',
-            databaseName: '',
-            databaseUser: '',
-            databasePassword: '',
-
-            bpomEmail: '',
-            bpomPassword: '',
-            bpomUrl: '',
-          },
+          };
+          return { form: newForm };
         }),
+
+      resetForm: () => {
+        const defaultForm = {
+          appName: 'API_CORE_MERTRACK',
+          workingDirectory: '',
+          loginTimeout: '',
+          rangeTransaction: 'last_1_week',
+          serverIp: '',
+          timezone: 'Asia/Jakarta',
+
+          backendPort: '',
+          backendBranch: '',
+          frontendPort: '',
+          frontendBranch: '',
+
+          databaseDialect: '',
+          databasePort: '',
+          databaseName: '',
+          databaseUser: '',
+          databasePassword: '',
+
+          bpomEmail: '',
+          bpomPassword: '',
+          bpomUrl: '',
+        };
+        set({ form: defaultForm });
+      },
     }),
     {
       name: 'setting-storage',
+      // Tambahkan logging untuk persist
+      onRehydrateStorage: () => (state) => {},
     },
   ),
 );

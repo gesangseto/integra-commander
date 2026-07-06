@@ -182,15 +182,14 @@ function SettingScreen() {
 
   // ================= SAVE =================
   const handleSave = () => {
-    // simpan ke zustand
-    setForm(form);
+    resetStore(); // reset store sebelum menyimpan
+    setForm(form); // simpan ke zustand
     showAlert('Saved successfully', 'success');
   };
 
   // ================= RESET =================
   const handleReset = () => {
     resetStore();
-
     setLocalForm(useSettingStore.getState().form);
   };
 

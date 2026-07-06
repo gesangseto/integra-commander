@@ -7,7 +7,8 @@ import {
   Stop,
   Article,
 } from '@mui/icons-material';
-
+import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
+import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import {
   Backdrop,
   Box,
@@ -40,6 +41,7 @@ import { useSettingStore } from '../../store/settingStore';
 import { useAlert } from '../AlertProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
 import { gitCloneBe, gitCloneBpom } from '../../utility/gitUtility';
+import { humanizeText, openLocation } from '../../utility';
 
 const DEPLOY_APPS = [
   {
@@ -81,8 +83,8 @@ export default function TabPm2() {
   const [deployLoading, setDeployLoading] = useState('');
   const [deployLogs, setDeployLogs] = useState([]);
 
-  const tempDir = `${setting.workingDirectory}\\Integra\\Temp`;
-  const serviceDir = `${setting.workingDirectory}\\Integra\\Service`;
+  const tempDir = `${setting.workingDirectory}\\temp`;
+  const serviceDir = `${setting.workingDirectory}\\services`;
   const packagePath = `${tempDir}\\package.json`;
 
   useEffect(() => {
@@ -109,21 +111,35 @@ export default function TabPm2() {
     }
     return output;
   };
-
   const fetchPm2List = async () => {
     try {
       const pm2 = Command.create('run-command', ['/C', 'pm2', 'jlist']);
-
       const output = await pm2.execute();
 
       if (output.stdout) {
-        setPm2List(JSON.parse(output.stdout));
+        const parsedData = JSON.parse(output.stdout);
+
+        const enrichedData = parsedData.map((proc) => {
+          const execPath = proc.pm2_env?.pm_exec_path || '';
+          // Ambil direktori dari script path
+          const rootPath =
+            execPath.substring(0, execPath.lastIndexOf('/')) ||
+            execPath.substring(0, execPath.lastIndexOf('\\')) ||
+            null;
+
+          return {
+            ...proc,
+            rootPath: rootPath,
+            scriptPath: execPath,
+          };
+        });
+
+        setPm2List(enrichedData);
       }
     } catch (error) {
       showAlert(`${error}`, 'error');
     }
   };
-
   const syncPm2Session = async () => {
     await Command.create('run-command', [
       '/C',
@@ -146,10 +162,23 @@ export default function TabPm2() {
       await new Promise((r) => setTimeout(r, 500));
       syncPm2Session();
       fetchPm2List();
+      showAlert(
+        `${humanizeText(action)} ${humanizeText(identifier)} successfully`,
+        'success',
+      );
     } catch (error) {
       showAlert(`${error}`, 'error');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleReloadEnv = async (item) => {
+    try {
+      await updateFileEnv(`${serviceDir}`, item.name);
+      await handlePm2Action('restart', item.name);
+    } catch (error) {
+      showAlert(`${error}`, 'error');
     }
   };
 
@@ -297,6 +326,7 @@ export default function TabPm2() {
       showAlert(`${err}`, 'error');
     }
   };
+
   const buildBackend = async (url, serviceName) => {
     try {
       // =====================================================
@@ -320,33 +350,7 @@ export default function TabPm2() {
       // =====================================================
       // UPDATE FILE .ENV
       // =====================================================
-      appendLog('Updating .env file...');
-      let envField = {
-        APP_NAME: serviceName,
-        APP_PORT: setting.backendPort,
-        APP_TIMEZONE: setting.timezone,
-
-        LOGIN_TIMEOUT: 15,
-        DB_DIALECT: setting.databaseDialect,
-        DB_PORT: setting.databasePort,
-        DB_DATABASE: setting.databaseName,
-        DB_USER: setting.databaseUser,
-        DB_PASSWORD: setting.databasePassword,
-
-        BPOM_URL: setting.bpomUrl,
-        BPOM_EMAIL: setting.bpomEmail,
-        BPOM_PASSWORD: setting.bpomPassword,
-      };
-      const envPath = `${tempDir}\\.env`;
-      let currentEnv = '';
-      try {
-        currentEnv = await readTextFile(envPath);
-      } catch {
-        appendLog('.env not found, creating new file...');
-      }
-      for (const key in envField)
-        currentEnv = setEnvValue(currentEnv, key, envField[key] || '');
-      await writeTextFile(envPath, currentEnv);
+      await updateFileEnv(`${tempDir}`, serviceName);
       // =====================================================
       // UPDATE FILES PACKAGE.JSON
       // =====================================================
@@ -376,6 +380,40 @@ export default function TabPm2() {
       showAlert(`${err}`, 'error');
     }
   };
+
+  const updateFileEnv = async (path, serviceName) => {
+    // =====================================================
+    // UPDATE FILE .ENV
+    // =====================================================
+    appendLog('Updating .env file...');
+    let envField = {
+      APP_NAME: serviceName,
+      APP_PORT: setting.backendPort,
+      APP_TIMEZONE: setting.timezone,
+
+      LOGIN_TIMEOUT: 15,
+      DB_DIALECT: setting.databaseDialect,
+      DB_PORT: setting.databasePort,
+      DB_DATABASE: setting.databaseName,
+      DB_USER: setting.databaseUser,
+      DB_PASSWORD: setting.databasePassword,
+
+      BPOM_URL: setting.bpomUrl,
+      BPOM_EMAIL: setting.bpomEmail,
+      BPOM_PASSWORD: setting.bpomPassword,
+    };
+    const envPath = `${path}\\.env`;
+    let currentEnv = '';
+    try {
+      currentEnv = await readTextFile(envPath);
+    } catch {
+      appendLog('.env not found, creating new file...');
+    }
+    for (const key in envField)
+      currentEnv = setEnvValue(currentEnv, key, envField[key] || '');
+    await writeTextFile(envPath, currentEnv);
+  };
+
   // helper update/add env
   const setEnvValue = (content, key, value) => {
     const regex = new RegExp(`^${key}=.*$`, 'm');
@@ -384,6 +422,7 @@ export default function TabPm2() {
     }
     return `${content.trim()}\n${key}=${value}\n`;
   };
+
   const formatUptime = (timestamp) => {
     if (!timestamp) return '0s';
     const uptimeMs = Date.now() - timestamp;
@@ -402,6 +441,7 @@ export default function TabPm2() {
     }
     return `${seconds}s`;
   };
+
   const updatePackageJson = async (path, data) => {
     const packageJson = JSON.parse(await readTextFile(path));
     Object.assign(packageJson, data);
@@ -428,6 +468,7 @@ export default function TabPm2() {
             <TableRow>
               <TableCell>ID</TableCell>
               <TableCell>Nama</TableCell>
+              <TableCell>Path</TableCell>
               <TableCell>Status</TableCell>
               <TableCell>Up Time</TableCell>
               <TableCell>RAM</TableCell>
@@ -442,6 +483,27 @@ export default function TabPm2() {
                 <TableCell>{proc.pm_id}</TableCell>
 
                 <TableCell>{proc.name}</TableCell>
+                <TableCell>
+                  <Tooltip title={proc.rootPath}>
+                    <Button
+                      size="small"
+                      variant="text"
+                      color="primary"
+                      onClick={() => openLocation(proc.rootPath)}
+                      disabled={!proc.rootPath}
+                      style={{
+                        fontFamily: 'monospace',
+                        maxWidth: '200px',
+                        display: 'block',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {proc.rootPath || '-'}
+                    </Button>
+                  </Tooltip>
+                </TableCell>
 
                 <TableCell>
                   <Chip
@@ -474,6 +536,16 @@ export default function TabPm2() {
                       <Article />
                     </IconButton>
                   </Tooltip>
+                  {proc.name !== 'pm2-logrotate' ? (
+                    <Tooltip title="Update .env">
+                      <IconButton
+                        color="info"
+                        onClick={() => handleReloadEnv(proc)}
+                      >
+                        <UploadFileOutlinedIcon />
+                      </IconButton>
+                    </Tooltip>
+                  ) : null}
 
                   <Tooltip title="Stop">
                     <IconButton

@@ -1,4 +1,5 @@
 import { Command } from '@tauri-apps/plugin-shell';
+import { showGlobalAlert } from '../component/AlertProvider';
 
 /**
  * Helper untuk membuka Windows Explorer pada path tertentu
@@ -22,6 +23,7 @@ export const openLocation = async (fullPath, onError) => {
     const cmd = Command.create('run-command', ['/C', 'explorer', windowsPath]);
     cmd.execute();
   } catch (error) {
+    showGlobalAlert(`Gagal membuka lokasi: ${error}`, 'error');
     if (onError) onError(String(error));
   }
 };
@@ -132,4 +134,18 @@ export async function runCommand(args, cwd) {
     );
   }
   return output;
+}
+
+export function humanizeText(str) {
+  if (!str) return '';
+  if (typeof str === 'object') str = JSON.stringify(str);
+  var i,
+    frags = str.split('_');
+  for (i = 0; i < frags.length; i++) {
+    frags[i] = frags[i].charAt(0).toUpperCase() + frags[i].slice(1);
+  }
+  var humanized = frags.join(' ');
+  // Mengganti 'id' menjadi 'ID' dalam format humanized
+  humanized = humanized.replace(/\bid\b/gi, 'ID');
+  return humanized;
 }

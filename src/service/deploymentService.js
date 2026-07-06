@@ -29,7 +29,7 @@ export const deployApp = async ({
   envContent,
 }) => {
   const tempDir = `${workingDirectory}/temp/${serviceName}`;
-  const serviceDir = `${workingDirectory}/service/${serviceName}`;
+  const serviceDir = `${workingDirectory}/services/${serviceName}`;
 
   try {
     // =========================
