@@ -9,6 +9,8 @@ import {
   Button,
   Divider,
   MenuItem,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 
 import DialogGitAuthentication from '../component/DialogGitAuthentication';
@@ -19,6 +21,7 @@ import { useSettingStore } from '../store/settingStore';
 import { useConfirm } from '../component/ConfirmProvider';
 import { useAlert } from '../component/AlertProvider';
 import { gitValidation } from '../utility/gitUtility';
+import { isEnabled, enable, disable } from '@tauri-apps/plugin-autostart';
 
 const listTimezone = [
   { offset: '-11:00', name: 'Pacific/Midway', label: '(GMT-11:00) Midway' },
@@ -133,6 +136,8 @@ function SettingScreen() {
   const [gitForm, setGitForm] = useState({ username: '', password: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [openGitDialog, setOpenGitDialog] = useState(false);
+  // ================= AUTOSTART =================
+  const [checked, setChecked] = useState(false);
   // ================= LOAD IP =================
   useEffect(() => {
     if (!form.serverIp) {
@@ -147,6 +152,20 @@ function SettingScreen() {
     }
   }, []);
 
+  // Cek status autostart saat komponen dimuat
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const enabled = await isEnabled();
+        setChecked(enabled);
+      } catch (err) {
+        console.error('Failed to get autostart status:', err);
+        showAlert(err.message || 'Gagal membaca status autostart', 'error');
+      }
+    };
+    checkStatus();
+  }, []);
+
   useEffect(() => {
     if (form.databaseDialect) {
       setLocalForm((prev) => ({
@@ -155,7 +174,25 @@ function SettingScreen() {
       }));
     }
   }, [form.databaseDialect]);
+  // Handler toggle switch
+  const handleToggle = async (event) => {
+    const newChecked = event.target.checked;
+    setChecked(newChecked); // Optimistic update
 
+    try {
+      if (newChecked) {
+        await enable();
+      } else {
+        await disable();
+      }
+    } catch (err) {
+      console.error('Failed to toggle autostart:', err);
+      showAlert(err.message || 'Gagal mengubah status autostart', 'error');
+      // Rollback jika gagal
+      const currentStatus = await isEnabled();
+      setChecked(currentStatus);
+    }
+  };
   // ================= HANDLE CHANGE =================
   const handleChange = (key, value) => {
     setLocalForm((prev) => ({
@@ -316,6 +353,20 @@ function SettingScreen() {
                   </MenuItem>
                 ))}
               </TextField>
+            </Grid>
+
+            <Grid size={4}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={checked}
+                    onChange={handleToggle}
+                    color="primary"
+                    inputProps={{ 'aria-label': 'autostart switch' }}
+                  />
+                }
+                label="Auto Start Application"
+              />
             </Grid>
           </Grid>
         </Box>
@@ -514,7 +565,6 @@ function SettingScreen() {
         {/* <Button variant="outlined" onClick={handleReset}>
           Reset
         </Button> */}
-
         <Button
           variant="contained"
           onClick={async () => {
