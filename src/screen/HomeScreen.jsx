@@ -23,7 +23,7 @@ export default function Home() {
 
   return (
     <Paper
-      sx={{ height: '100%', width: '100%', p: 3, boxSizing: 'border-box' }}
+      sx={{ minHeight: '100%', width: '100%', p: 3, boxSizing: 'border-box' }}
     >
       <Info />
 

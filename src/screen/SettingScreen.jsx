@@ -233,10 +233,9 @@ function SettingScreen() {
   return (
     <Paper
       sx={{
-        height: '100%',
+        minHeight: '100%',
         width: '100%',
         px: 3,
-        overflow: 'hidden',
         boxSizing: 'border-box',
       }}
     >
@@ -355,7 +354,7 @@ function SettingScreen() {
               </TextField>
             </Grid>
 
-            <Grid size={4}>
+            {/* <Grid size={4}>
               <FormControlLabel
                 control={
                   <Switch
@@ -367,7 +366,7 @@ function SettingScreen() {
                 }
                 label="Auto Start Application"
               />
-            </Grid>
+            </Grid> */}
           </Grid>
         </Box>
       </Box>

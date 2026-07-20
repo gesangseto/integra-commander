@@ -60,20 +60,52 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Box display="flex" height="100vh" overflow="hidden">
-        <SideBar />
+      <Box
+        sx={{
+          display: 'flex',
+          height: '100vh',
+          width: '100vw',
+          overflow: 'hidden',
+          backgroundColor: '#f8fafc',
+        }}
+      >
+        <Box sx={{ flexShrink: 0, height: '100vh', overflow: 'hidden' }}>
+          <SideBar />
+        </Box>
 
-        <Box display="flex" flexDirection="column" flex={1} overflow="hidden">
-          <Header />
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: 1,
+            minWidth: 0,
+            height: '100vh',
+            overflow: 'hidden',
+          }}
+        >
+          <Box sx={{ flexShrink: 0, zIndex: 2 }}>
+            <Header />
+          </Box>
 
-          <Box flex={1} overflow="hidden" minHeight={0}>
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              px: 1,
+              py: 1,
+            }}
+          >
             <Routes>
               <Route path="/" element={<HomeScreen user={user} />} />
               <Route path="/setting" element={<SettingScreen />} />
             </Routes>
           </Box>
 
-          <Footer />
+          <Box sx={{ flexShrink: 0 }}>
+            <Footer />
+          </Box>
         </Box>
       </Box>
     </BrowserRouter>
