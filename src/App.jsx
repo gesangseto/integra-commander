@@ -1,4 +1,5 @@
 import { Box } from '@mui/material';
+import { invoke } from '@tauri-apps/api/core';
 import { Command } from '@tauri-apps/plugin-shell';
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
@@ -9,6 +10,7 @@ import HomeScreen from './screen/HomeScreen';
 import SettingScreen from './screen/SettingScreen';
 import Splash from './screen/Splash';
 import { useAppStore } from './store/pathStore';
+import { showGlobalAlert } from './component/AlertProvider';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -18,6 +20,16 @@ function App() {
   useEffect(() => {
     const initApp = async () => {
       try {
+        // =====================================================
+        // CEK ADMIN PRIVILEGES
+        // =====================================================
+        const admin = await invoke('is_admin');
+        if (!admin) {
+          showGlobalAlert(
+            'Aplikasi berjalan tanpa hak Admin. Fitur "Setup Startup" membutuhkan Run as Administrator.',
+            'warning'
+          );
+        }
         // =====================================================
         // PM2 RESURRECT
         // =====================================================

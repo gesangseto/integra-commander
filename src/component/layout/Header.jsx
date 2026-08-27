@@ -1,9 +1,25 @@
+import { PowerSettingsNew } from '@mui/icons-material';
 import { Circle } from '@mui/icons-material';
-import { Box, Grid, keyframes, Paper } from '@mui/material';
+import {
+  Box,
+  Button,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Grid,
+  keyframes,
+  Paper,
+  TextField,
+} from '@mui/material';
+import { invoke } from '@tauri-apps/api/core';
 import { Command } from '@tauri-apps/plugin-shell';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import mertrackLogo from '../../assets/mertrack.png';
+import { showGlobalAlert } from '../AlertProvider';
 import { useAppStore } from '../../store/pathStore';
+import { useSettingStore } from '../../store/settingStore';
 
 const blinkRed = keyframes`
   0% { background-color: #ff8383; }
@@ -18,6 +34,11 @@ const blinkGreen = keyframes`
 
 function Header() {
   const store = useAppStore();
+  const { workingDirectory, appName } = useSettingStore((s) => s.form);
+  const [settingUp, setSettingUp] = useState(false);
+  const [passwordDialog, setPasswordDialog] = useState(false);
+  const [password, setPassword] = useState('');
+
   useEffect(() => {
     const fetchAll = async () => {
       // 1. Fetch Nginx menggunakan path dari store
@@ -60,6 +81,40 @@ function Header() {
 
     fetchAll();
   }, [store.nginxPath]); // Auto-refresh jika user merubah folder Nginx
+
+  const handleSetupStartup = () => {
+    if (!workingDirectory) {
+      showGlobalAlert(
+        'Working directory belum diatur! Silakan atur di menu Settings.',
+        'warning',
+      );
+      return;
+    }
+    setPassword('');
+    setPasswordDialog(true);
+  };
+
+  const handleConfirmSetup = async () => {
+    if (!password) {
+      showGlobalAlert('Password tidak boleh kosong.', 'warning');
+      return;
+    }
+    setPasswordDialog(false);
+    setSettingUp(true);
+    try {
+      const result = await invoke('create_startup_script', {
+        workingDirectory,
+        nginxPath: store.nginxPath,
+        appName: appName || 'IntegraCommander',
+        password,
+      });
+      showGlobalAlert(result, 'success');
+    } catch (err) {
+      showGlobalAlert(String(err), 'error');
+    } finally {
+      setSettingUp(false);
+    }
+  };
 
   return (
     <Paper sx={{ borderRadius: 2 }}>
@@ -121,9 +176,73 @@ function Header() {
                 </span>
               </Box>
             </Box>
+            {/* SETUP STARTUP BUTTON */}
+            <Box
+              flex={0.5}
+              display="flex"
+              alignItems="center"
+              justifyContent="flex-end"
+              pr={2}
+              mr={2}
+            >
+              <Button
+                variant="outlined"
+                size="small"
+                color="warning"
+                disabled={settingUp}
+                onClick={handleSetupStartup}
+                startIcon={
+                  settingUp ? (
+                    <CircularProgress size={16} color="inherit" />
+                  ) : (
+                    <PowerSettingsNew />
+                  )
+                }
+                sx={{ fontWeight: 600, textTransform: 'none' }}
+              >
+                {settingUp ? 'Setting...' : 'Setup Startup'}
+              </Button>
+            </Box>
           </Box>
         </Grid>
       </Grid>
+
+      {/* PASSWORD DIALOG UNTUK TASK SCHEDULER */}
+      <Dialog
+        open={passwordDialog}
+        onClose={() => setPasswordDialog(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Windows User Password</DialogTitle>
+        <DialogContent>
+          <Box mt={1}>
+            <TextField
+              fullWidth
+              type="password"
+              label="Password user Windows (untuk menjalankan tanpa logon)"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleConfirmSetup();
+              }}
+              autoFocus
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPasswordDialog(false)} disabled={settingUp}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmSetup}
+            disabled={settingUp}
+          >
+            {settingUp ? 'Processing...' : 'Create Task'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 }

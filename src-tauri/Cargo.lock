@@ -2006,6 +2006,7 @@ dependencies = [
 name = "integra-commander"
 version = "0.1.0"
 dependencies = [
+ "dirs 6.0.0",
  "fix-path-env",
  "serde",
  "serde_json",

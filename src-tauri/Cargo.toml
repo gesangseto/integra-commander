@@ -31,4 +31,5 @@ tauri-plugin-dialog = "2.7.0"
 tauri-plugin-fs = "2.5.0"
 tauri-plugin-autostart = "2.5.1"
 sysinfo = "0.38.4"
+dirs = "6"
 
