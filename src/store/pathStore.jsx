@@ -9,6 +9,7 @@ export const useAppStore = create(
       nginxVersion: null,
 
       // --- PM2 ---
+      pm2Path: '',
       pm2Version: null,
 
       // --- NODE & NPM ---
@@ -17,6 +18,8 @@ export const useAppStore = create(
 
       // --- ACTIONS ---
       setNginxPath: (path) => set({ nginxPath: path }),
+
+      setPm2Path: (path) => set({ pm2Path: path }),
 
       // Action massal untuk versi (agar kode di Header lebih pendek)
       setVersions: (versions) =>

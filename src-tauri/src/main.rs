@@ -56,87 +56,245 @@ fn is_admin() -> bool {
     }
 }
 
+
 #[tauri::command]
 fn create_startup_script(
     working_directory: String,
     nginx_path: String,
+    pm2_path: String,
     _app_name: String,
     password: String,
 ) -> Result<String, String> {
-    // Determine PM2_HOME: prefer USERPROFILE env, fallback to current_user profile
-    let pm2_home = std::env::var("USERPROFILE")
+
+    // =========================================================
+    // USER PROFILE
+    // =========================================================
+
+    let user_profile = std::env::var("USERPROFILE")
         .unwrap_or_else(|_| {
             let home_dir = dirs::home_dir()
                 .unwrap_or_else(|| std::path::PathBuf::from("C:\\"));
+
             home_dir.to_string_lossy().to_string()
         });
-    let pm2_home = format!("{}\\.pm2", pm2_home);
 
-    let log_file = format!("{}\\log\\scheduller.log", working_directory);
-    let bat_content = format!(
-        "@echo off\r\n\
-         pushd \"{working_directory}\"\r\n\
-         set \"LOG_FILE={log_file}\"\r\n\
-         if not exist \"{working_directory}\\log\" mkdir \"{working_directory}\\log\"\r\n\
-         timeout /t 10 /nobreak >nul\r\n\
-         echo [%%date%% %%time%%] Memulai layanan... >> \"%%LOG_FILE%%\"\r\n\
-         \"{nginx_path}\\nginx.exe\" -p \"{nginx_path}\" -s reload\r\n\
-         if %%errorlevel%%==0 (\r\n\
-             echo [%%date%% %%time%%] Nginx: OK >> \"%%LOG_FILE%%\"\r\n\
-         ) else (\r\n\
-             echo [%%date%% %%time%%] Nginx: GAGAL (error %%errorlevel%%) >> \"%%LOG_FILE%%\"\r\n\
-         )\r\n\
-         set \"PM2_HOME={pm2_home}\" 
-         pm2 resurrect\r\n\
-         if %%errorlevel%%==0 (\r\n\
-             echo [%%date%% %%time%%] PM2: OK >> \"%%LOG_FILE%%\"\r\n\
-         ) else (\r\n\
-             echo [%%date%% %%time%%] PM2: GAGAL (error %%errorlevel%%) >> \"%%LOG_FILE%%\"\r\n\
-         )\r\n\
-         echo [%%date%% %%time%%] Selesai >> \"%%LOG_FILE%%\"\r\n\
-         exit\r\n"
-    );
+    let pm2_home = format!("{}\\.pm2", user_profile);
 
-    // Get last folder name from workingDirectory
-    let last_folder = std::path::Path::new(&working_directory)
+    let pm2_cmd = &pm2_path;
+
+
+    // =========================================================
+    // WORKING DIRECTORY
+    // =========================================================
+
+    let working_path = std::path::Path::new(&working_directory);
+
+    let last_folder = working_path
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "App".to_string());
 
-    // Ensure cmd directory exists
+
+    // =========================================================
+    // BAT / CMD CONTENT
+    // =========================================================
+
+    let bat_content = format!(
+r#"@echo off
+
+pushd "{working_directory}" || exit /b 1
+
+timeout /t 10 /nobreak >nul
+
+set "LOG_DIR={working_directory}\log"
+set "LOG_FILE=%LOG_DIR%\services.log"
+
+REM =========================================================
+REM MAKE SURE LOG DIRECTORY EXISTS
+REM =========================================================
+
+if not exist "%LOG_DIR%" (
+    mkdir "%LOG_DIR%"
+)
+
+REM =========================================================
+REM MAKE SURE SERVICES.LOG EXISTS
+REM =========================================================
+
+if not exist "%LOG_FILE%" (
+    type nul > "%LOG_FILE%"
+)
+
+REM =========================================================
+REM TIMESTAMP
+REM =========================================================
+
+for /f "delims=" %%t in ('powershell -NoProfile -Command "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'"') do set "TS=%%t"
+
+set "FAILED=0"
+
+REM =========================================================
+REM NGINX
+REM =========================================================
+
+tasklist /FI "IMAGENAME eq nginx.exe" 2>nul | find /I "nginx.exe" >nul
+
+if errorlevel 1 (
+
+    start "" "{nginx_path}\nginx.exe" -p "{nginx_path}"
+
+    timeout /t 2 /nobreak >nul
+
+    tasklist /FI "IMAGENAME eq nginx.exe" 2>nul | find /I "nginx.exe" >nul
+
+    if errorlevel 1 (
+        set "FAILED=1"
+        call :WriteLog "[%TS%] -> FAILED: MERTRACK {last_folder}, failed running nginx."
+    )
+
+) else (
+
+    "{nginx_path}\nginx.exe" -p "{nginx_path}" -s reload
+
+    if errorlevel 1 (
+        set "FAILED=1"
+        call :WriteLog "[%TS%] -> FAILED: MERTRACK {last_folder}, failed running nginx."
+    )
+)
+
+REM =========================================================
+REM PM2
+REM =========================================================
+
+set "PM2_HOME={pm2_home}"
+
+if not exist "{pm2_cmd}" (
+
+    set "FAILED=1"
+
+    call :WriteLog "[%TS%] -> FAILED: MERTRACK {last_folder}, pm2.cmd not found."
+
+) else (
+
+    "{pm2_cmd}" resurrect
+
+    if errorlevel 1 (
+        set "FAILED=1"
+        call :WriteLog "[%TS%] -> FAILED: MERTRACK {last_folder}, failed running pm2."
+    )
+)
+
+REM =========================================================
+REM RESULT
+REM =========================================================
+
+if "%FAILED%"=="0" (
+    call :WriteLog "[%TS%] -> SUCCESS: MERTRACK {last_folder} server successfully started."
+)
+
+popd
+
+exit /b
+
+
+REM =========================================================
+REM WRITE LOG
+REM =========================================================
+
+:WriteLog
+set "msg=%~1"
+set "msg=%msg:>=^>%"
+if not exist "%LOG_FILE%" (
+    echo(%msg%>"%LOG_FILE%"
+) else (
+    echo(%msg%>"%LOG_FILE%.new"
+    type "%LOG_FILE%" >> "%LOG_FILE%.new"
+    move /y "%LOG_FILE%.new" "%LOG_FILE%" >nul
+)
+goto :eof
+"#,
+        working_directory = working_directory,
+        nginx_path = nginx_path,
+        pm2_home = pm2_home,
+        pm2_cmd = pm2_cmd,
+        last_folder = last_folder,
+    );
+
+
+    // =========================================================
+    // CREATE CMD DIRECTORY
+    // =========================================================
+
     let cmd_dir = format!("{}\\cmd", working_directory);
+
     std::fs::create_dir_all(&cmd_dir)
         .map_err(|e| format!("Gagal membuat folder cmd: {}", e))?;
 
-    // Write start file as .cmd
-    let bat_path = format!("{}\\Autostart_{}.cmd", cmd_dir, last_folder);
-    std::fs::write(&bat_path, bat_content)
-        .map_err(|e| format!("Gagal membuat start.bat: {}", e))?;
 
-    // Register on Windows Task Scheduler (runs at startup using current user account)
+    // =========================================================
+    // WRITE CMD FILE
+    // =========================================================
+
+    let cmd_path = format!(
+        "{}\\Autostart_{}.cmd",
+        cmd_dir,
+        last_folder
+    );
+
+    std::fs::write(&cmd_path, bat_content)
+        .map_err(|e| format!("Gagal membuat file CMD: {}", e))?;
+
+
+    // =========================================================
+    // TASK SCHEDULER
+    // =========================================================
+
     let task_name = format!("Autostart_{}", last_folder);
+
     let username = std::env::var("USERNAME")
         .map_err(|_| "Gagal mendapatkan username saat ini".to_string())?;
+
     let output = std::process::Command::new("schtasks")
         .args([
             "/Create",
-            "/F",                           // Force overwrite if exists
-            "/TN", &task_name,              // Task name
-            "/TR", &bat_path, // Script path (Rust akan quote otomatis jika ada spasi)
-            "/SC", "ONSTART",              // Trigger: at system startup
-            "/RL", "HIGHEST",              // Run with highest privileges
-            "/RU", &username,              // Run as the user who runs Integra Commander
-            "/RP", &password,              // User password (run without logon)
+            "/F",
+            "/TN",
+            &task_name,
+            "/TR",
+            &cmd_path,
+            "/SC",
+            "ONSTART",
+            "/RL",
+            "HIGHEST",
+            "/RU",
+            &username,
+            "/RP",
+            &password,
         ])
         .output()
         .map_err(|e| format!("Gagal menjalankan schtasks: {}", e))?;
 
+
+    // =========================================================
+    // CHECK RESULT
+    // =========================================================
+
     if !output.status.success() {
+
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        return Err(format!("Gagal mendaftarkan ke Task Scheduler: {}", stderr));
+
+        return Err(format!(
+            "Gagal mendaftarkan ke Task Scheduler: {}",
+            stderr
+        ));
     }
 
-    Ok(format!("Berhasil! Script: {} | Task: {} | Akan jalan otomatis saat Windows startup", bat_path, task_name))
+
+    Ok(format!(
+        "Berhasil! Script: {} | Task: {} | Akan jalan otomatis saat Windows startup",
+        cmd_path,
+        task_name
+    ))
 }
 
 fn main() {
