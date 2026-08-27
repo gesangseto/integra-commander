@@ -176,7 +176,7 @@ if not exist "{pm2_cmd}" (
 
 ) else (
 
-    "{pm2_cmd}" resurrect
+    call "{pm2_cmd}" resurrect
 
     if errorlevel 1 (
         set "FAILED=1"
