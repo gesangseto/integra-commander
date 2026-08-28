@@ -12,6 +12,7 @@ import {
   keyframes,
   Paper,
   TextField,
+  Typography,
 } from '@mui/material';
 import { invoke } from '@tauri-apps/api/core';
 import { Command } from '@tauri-apps/plugin-shell';
@@ -87,7 +88,7 @@ function Header() {
       // Update sekaligus ke Store
       store.setVersions({
         nginx: nv || 'Error',
-        pm2: pm2Out.stdout.trim() || 'Error',
+        pm2: pm2Out.code === 0 ? pm2Out.stdout.trim() : 'Error',
         node: nodeOut.stdout.trim() || 'Error',
         npm: npmOut.stdout.trim() || 'Error',
       });
@@ -142,8 +143,9 @@ function Header() {
     <Paper sx={{ borderRadius: 2 }}>
       <Grid container spacing={2} alignItems="center">
         <Grid item size={12}>
-          {/* IMAGE INFO */}
-          <Box display="flex">
+          {/* 3 BAGIAN HORIZONTAL: IMAGE | DEVICE INFO | SETUP STARTUP */}
+          <Box display="flex" alignItems="center">
+            {/* BAGIAN 1 - IMAGE INFO */}
             <Box flex={1}>
               <img
                 src={mertrackLogo}
@@ -151,61 +153,66 @@ function Header() {
                 loading="lazy"
               />
             </Box>
-            {/* DEVICE INFO */}
-            <Box flex={1} alignContent={'center'} mx={5}>
+
+            {/* BAGIAN 2 - DEVICE INFO (di tengah) */}
+            <Box flex={1} display="flex" justifyContent="center">
               <Box
                 sx={{
-                  width: 450,
+                  width: 460,
                   height: 60,
                   borderRadius: 3,
                   bgcolor: '#ffffff',
                   border: 1,
-                  // Properti untuk mengetengahkan teks:
                   display: 'flex',
                   justifyContent: 'space-evenly',
                   alignItems: 'center',
-                  color: 'black', // Agar teks kontras dengan background merah
                   fontWeight: 'bold',
                   fontSize: '1.2rem',
                 }}
               >
-                <span
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                <Typography
+                  variant="h6"
+                  fontWeight="bold"
+                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
                 >
                   <Circle
                     fontSize="small"
                     color={store.nodeVersion ? 'success' : 'error'}
                   />
                   node {store.nodeVersion}
-                </span>
-                <span
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                </Typography>
+                <Typography
+                  variant="h6"
+                  fontWeight="bold"
+                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
                 >
                   <Circle
                     fontSize="small"
                     color={store.npmVersion ? 'success' : 'error'}
                   />
                   npm {store.npmVersion}
-                </span>
-                <span
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                </Typography>
+                <Typography
+                  variant="h6"
+                  fontWeight="bold"
+                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
                 >
                   <Circle
                     fontSize="small"
                     color={store.pm2Version ? 'success' : 'error'}
                   />
                   pm2 {store.pm2Version}
-                </span>
+                </Typography>
               </Box>
             </Box>
-            {/* SETUP STARTUP BUTTON */}
+
+            {/* BAGIAN 3 - SETUP STARTUP BUTTON (paling kanan) */}
             <Box
-              flex={0.5}
+              flex={1}
               display="flex"
               alignItems="center"
               justifyContent="flex-end"
               pr={2}
-              mr={2}
             >
               <Button
                 variant="outlined"

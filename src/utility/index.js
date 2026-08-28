@@ -43,87 +43,35 @@ export async function getSystemInfo() {
   return JSON.parse(result.stdout);
 }
 
-export async function getNginxStatus() {
+// Baca total memori (working set) suatu proses via Get-Process (dalam MB).
+// Lebih akurat & konsisten dengan Task Manager dibanding parsing `tasklist`.
+async function getProcessMemoryMB(processName) {
   const cmd = Command.create('run-command', [
     '/C',
-    'tasklist',
-    '/FI',
-    'IMAGENAME eq nginx.exe',
+    'powershell',
+    '-NoProfile',
+    '-Command',
+    `(Get-Process | Where-Object { $_.ProcessName -eq '${processName}' } | Measure-Object -Property WorkingSet64 -Sum).Sum`,
   ]);
   const result = await cmd.execute();
-  const lines = result.stdout
-    .split('\n')
-    .filter((x) => x.trim().startsWith('nginx.exe'));
-  let totalMemory = 0;
-  for (const line of lines) {
-    const match = line.match(/([\d,]+)\s*K/i);
-    if (match) {
-      totalMemory += parseInt(match[1].replace(/,/g, ''));
-    }
-  }
-  let res = {
-    running: lines.length > 0,
-    processCount: lines.length,
-    memoryMB: (totalMemory / 1024).toFixed(2),
-  };
-  return res.memoryMB;
+  const sumBytes = parseFloat((result.stdout || '').trim()) || 0;
+  return Number((sumBytes / 1024 / 1024).toFixed(2));
+}
+
+export async function getNginxStatus() {
+  const memoryMB = await getProcessMemoryMB('nginx');
+  return memoryMB;
 }
 export async function getNodejsStatus() {
-  const cmd = Command.create('run-command', [
-    '/C',
-    'tasklist',
-    '/FI',
-    'IMAGENAME eq node.exe',
-  ]);
-  const result = await cmd.execute();
-  const lines = result.stdout
-    .split('\n')
-    .filter((x) => x.trim().startsWith('node.exe'));
-  let totalMemory = 0;
-  for (const line of lines) {
-    const match = line.match(/([\d,]+)\s*K/i);
-    if (match) {
-      totalMemory += parseInt(match[1].replace(/,/g, ''));
-    }
-  }
-  let res = {
-    running: lines.length > 0,
-    processCount: lines.length,
-    memoryMB: Number((totalMemory / 1024).toFixed(2)),
-  };
-  return res.memoryMB;
+  const memoryMB = await getProcessMemoryMB('node');
+  return memoryMB;
 }
 
 export async function getDatabaseStatus(process = 'sqlservr.exe') {
-  const cmd = Command.create('run-command', [
-    '/C',
-    'tasklist',
-    '/FI',
-    `IMAGENAME eq ${process}`,
-  ]);
-
-  const result = await cmd.execute();
-
-  const lines = result.stdout
-    .split('\n')
-    .filter((x) => x.trim().startsWith('sqlservr.exe'));
-
-  let totalMemory = 0;
-
-  for (const line of lines) {
-    const match = line.match(/([\d,]+)\s*K/i);
-
-    if (match) {
-      totalMemory += parseInt(match[1].replace(/,/g, ''));
-    }
-  }
-
-  let res = {
-    running: lines.length > 0,
-    processCount: lines.length,
-    memoryMB: Number((totalMemory / 1024).toFixed(2)),
-  };
-  return res.memoryMB;
+  // Hilangkan ekstensi .exe karena Get-Process memakai nama proses tanpa ekstensi
+  const name = process.toLowerCase().replace(/\.exe$/, '');
+  const memoryMB = await getProcessMemoryMB(name);
+  return memoryMB;
 }
 export async function runCommand(args, cwd) {
   const cmd = Command.create('run-command', args, { cwd });

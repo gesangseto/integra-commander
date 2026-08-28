@@ -39,8 +39,13 @@ import { Command } from '@tauri-apps/plugin-shell';
 
 import { useSettingStore } from '../../store/settingStore';
 import { useAlert } from '../AlertProvider';
+import { useConfirm } from '../ConfirmProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
-import { gitCloneBe, gitCloneBpom } from '../../utility/gitUtility';
+import {
+  gitCloneBe,
+  gitCloneBpom,
+  gitValidation,
+} from '../../utility/gitUtility';
 import { humanizeText, openLocation } from '../../utility';
 
 const DEPLOY_APPS = [
@@ -63,6 +68,7 @@ const DEPLOY_APPS = [
 
 export default function TabPm2() {
   const { showAlert } = useAlert();
+  const { confirm: showConfirm } = useConfirm();
   const [isLoading, setIsLoading] = useState(false);
   const [openGitDialog, setOpenGitDialog] = useState(false);
   const [selectedDeploy, setSelectedDeploy] = useState('');
@@ -115,7 +121,7 @@ export default function TabPm2() {
     try {
       const pm2 = Command.create('run-command', ['/C', 'pm2', 'jlist']);
       const output = await pm2.execute();
-
+      if (output.code === 1) throw new Error(output.stderr);
       if (output.stdout) {
         const parsedData = JSON.parse(output.stdout);
 
@@ -149,6 +155,19 @@ export default function TabPm2() {
     ]).execute();
   };
 
+  const handleSavePm2 = async () => {
+    setIsLoading(true);
+    try {
+      await syncPm2Session();
+      fetchPm2List();
+      showAlert('PM2 session saved successfully', 'success');
+    } catch (error) {
+      showAlert(`${error}`, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handlePm2Action = async (action, identifier) => {
     setIsLoading(true);
     try {
@@ -160,7 +179,6 @@ export default function TabPm2() {
       ]).execute();
 
       await new Promise((r) => setTimeout(r, 500));
-      syncPm2Session();
       fetchPm2List();
       showAlert(
         `${humanizeText(action)} ${humanizeText(identifier)} successfully`,
@@ -311,11 +329,7 @@ export default function TabPm2() {
       // =====================================================
       // SAVE PM2 SESSION
       // =====================================================
-      appendLog('Saving PM2 session...');
-      // Simpan agar auto startup saat reboot
-      await syncPm2Session();
-      // =====================================================
-      // SUCCESS
+      // Success
       // =====================================================
       appendLog('Deployment success');
       // Refresh table PM2
@@ -454,13 +468,32 @@ export default function TabPm2() {
           PM2 Management
         </Typography>
 
-        <Button
-          variant="contained"
-          startIcon={<RocketLaunch />}
-          onClick={() => setOpenDeployDialog(true)}
-        >
-          Tambah / Update App
-        </Button>
+        <Box display="flex" gap={1}>
+          <Button
+            color="success"
+            variant="outlined"
+            onClick={async () => {
+              const ok = await showConfirm({
+                title: 'Save PM2',
+                message: 'Apakah anda yakin ingin menyimpan session PM2?',
+                severity: 'danger',
+              });
+              if (ok) {
+                setOpenGitDialog(true);
+                setSelectedDeploy('');
+              }
+            }}
+          >
+            Save PM2
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<RocketLaunch />}
+            onClick={() => setOpenDeployDialog(true)}
+          >
+            Tambah / Update App
+          </Button>
+        </Box>
       </Box>
       <TableContainer component={Paper} variant="outlined">
         <Table>
@@ -667,8 +700,21 @@ export default function TabPm2() {
         onClose={() => setOpenGitDialog(false)}
         gitForm={gitForm}
         setGitForm={setGitForm}
-        loading={deployLoading !== ''}
+        loading={deployLoading !== '' || isLoading}
         onSubmit={async () => {
+          if (!selectedDeploy) {
+            setIsLoading(true);
+            const validasi = await gitValidation(gitForm);
+            if (validasi.error) {
+              setIsLoading(false);
+              showAlert(validasi.message, 'error');
+              return;
+            }
+            setOpenGitDialog(false);
+            await handleSavePm2();
+            setIsLoading(false);
+            return;
+          }
           setOpenGitDialog(false);
           await handleDeploy(selectedDeploy, gitForm);
         }}
