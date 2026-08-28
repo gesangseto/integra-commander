@@ -297,6 +297,153 @@ goto :eof
     ))
 }
 
+
+#[tauri::command]
+fn create_autorun_commander() -> Result<String, String> {
+
+    // =========================================================
+    // GET CURRENT EXE PATH
+    // =========================================================
+
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("Gagal mendapatkan path executable: {}", e))?;
+
+    let exe_path_str = exe_path.to_string_lossy().to_string();
+
+
+    // =========================================================
+    // CURRENT USER (DOMAIN\USER)
+    // =========================================================
+
+    let username = std::env::var("USERNAME")
+        .map_err(|_| "Gagal mendapatkan username saat ini".to_string())?;
+
+    let user_domain = std::env::var("USERDOMAIN")
+        .or_else(|_| std::env::var("COMPUTERNAME"))
+        .unwrap_or_else(|_| ".".to_string());
+
+    let user_id = format!("{}\\{}", user_domain, username);
+
+
+    // =========================================================
+    // TASK NAME
+    // =========================================================
+
+    let task_name = "Autostart_Integra_Commander";
+
+
+    // =========================================================
+    // TASK SCHEDULER XML
+    // =========================================================
+
+    let task_xml = format!(
+r#"<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Auto-run Integra Commander as Administrator on user logon with 5s delay</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <Delay>PT5S</Delay>
+      <UserId>{user_id}</UserId>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>{user_id}</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>true</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>"{exe_path}"</Command>
+    </Exec>
+  </Actions>
+</Task>"#,
+        user_id = user_id,
+        exe_path = exe_path_str,
+    );
+
+
+    // =========================================================
+    // WRITE XML (UTF-16 LE + BOM) TO TEMP FILE
+    // =========================================================
+
+    let temp_dir = std::env::temp_dir();
+    let xml_path = temp_dir.join("IntegraCommander_autorun_task.xml");
+
+    let mut xml_bytes: Vec<u8> = vec![0xFF, 0xFE];
+    for unit in task_xml.encode_utf16() {
+        xml_bytes.extend_from_slice(&unit.to_le_bytes());
+    }
+
+    std::fs::write(&xml_path, &xml_bytes)
+        .map_err(|e| format!("Gagal membuat file XML task: {}", e))?;
+
+
+    // =========================================================
+    // REGISTER TASK SCHEDULER
+    // =========================================================
+
+    let xml_path_str = xml_path.to_string_lossy().to_string();
+
+    let output = std::process::Command::new("schtasks")
+        .args([
+            "/Create",
+            "/F",
+            "/TN",
+            task_name,
+            "/XML",
+            &xml_path_str,
+        ])
+        .output()
+        .map_err(|e| format!("Gagal menjalankan schtasks: {}", e))?;
+
+
+    // =========================================================
+    // CLEANUP TEMP XML
+    // =========================================================
+
+    let _ = std::fs::remove_file(&xml_path);
+
+
+    // =========================================================
+    // CHECK RESULT
+    // =========================================================
+
+    if !output.status.success() {
+
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+        return Err(format!(
+            "Gagal mendaftarkan ke Task Scheduler: {}",
+            stderr
+        ));
+    }
+
+
+    Ok(format!(
+        "Berhasil! Task: {} | Exe: {} | Trigger: ONLOGON (user: {}) + 5s delay | Run only when user is logged on (Admin)",
+        task_name,
+        exe_path_str,
+        user_id
+    ))
+}
+
+
 fn main() {
     let _ = fix_path_env::fix();
     
@@ -310,7 +457,7 @@ fn main() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_serialplugin::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
-        .invoke_handler(tauri::generate_handler![shutdown, get_local_ip, is_admin, create_startup_script])
+        .invoke_handler(tauri::generate_handler![shutdown, get_local_ip, is_admin, create_startup_script, create_autorun_commander])
         .setup(|app| {
             let handle = app.handle().clone();
             // Jalankan BACKGROUND THREAD untuk memantau sistem

@@ -124,14 +124,17 @@ function Header() {
     setPasswordDialog(false);
     setSettingUp(true);
     try {
-      const result = await invoke('create_startup_script', {
+      const startupResult = await invoke('create_startup_script', {
         workingDirectory,
         nginxPath: store.nginxPath,
         pm2Path: store.pm2Path,
         appName: appName || 'IntegraCommander',
         password,
       });
-      showGlobalAlert(result, 'success');
+
+      const autorunResult = await invoke('create_autorun_commander');
+
+      showGlobalAlert(`${startupResult}\n${autorunResult}`, 'success');
     } catch (err) {
       showGlobalAlert(String(err), 'error');
     } finally {
