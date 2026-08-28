@@ -23,6 +23,8 @@ export const useSettingStore = create(
         databaseUser: '',
         databasePassword: '',
 
+        bpomAppPort: '',
+        bpomAppName: '',
         bpomEmail: '',
         bpomPassword: '',
         bpomUrl: 'https://ttacdev.pom.go.id/dev/public/api/v3/',
@@ -57,6 +59,8 @@ export const useSettingStore = create(
           databaseUser: '',
           databasePassword: '',
 
+          bpomAppPort: '',
+          bpomAppName: '',
           bpomEmail: '',
           bpomPassword: '',
           bpomUrl: '',

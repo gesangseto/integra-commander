@@ -1,19 +1,18 @@
 import {
+  Article,
   Delete,
   FolderOpen,
-  MonitorHeart,
   Refresh,
   RocketLaunch,
   Stop,
-  Article,
 } from '@mui/icons-material';
-import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import {
   Backdrop,
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -31,38 +30,36 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { CircularProgress } from '@mui/material';
-import { useEffect, useState } from 'react';
-import Pm2LogViewer from '../Pm2LogViewer';
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
+import { useEffect, useState } from 'react';
+import Pm2LogViewer from '../Pm2LogViewer';
 
 import { useSettingStore } from '../../store/settingStore';
+import { humanizeText, openLocation } from '../../utility';
+import { gitClone, gitValidation } from '../../utility/gitUtility';
 import { useAlert } from '../AlertProvider';
 import { useConfirm } from '../ConfirmProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
-import {
-  gitCloneBe,
-  gitCloneBpom,
-  gitValidation,
-} from '../../utility/gitUtility';
-import { humanizeText, openLocation } from '../../utility';
 
 const DEPLOY_APPS = [
   {
     key: 'API_CORE',
     title: 'Update Api Core Mertrack',
     description: 'Pull latest source & reload PM2',
+    git_url: 'https://gitlab.com/mertrack/mertrack-core',
   },
   {
     key: 'API_BPOM',
     title: 'Install / Update BPOM API',
     description: 'Deploy BPOM API service',
+    git_url: 'https://gitlab.com/gesang/connector-bpom',
   },
   {
     key: 'logrotate',
     title: 'Install Logrotate',
     description: 'Setup PM2 log rotation',
+    git_url: null,
   },
 ];
 
@@ -232,25 +229,30 @@ export default function TabPm2() {
       appendLog('Starting deployment...');
 
       // =====================================================
-      // MENENTUKAN NAMA SERVICE dan url git
+      // MENENTUKAN NAMA SERVICE DAN PORT
       // =====================================================
       // Tentukan nama PM2 service berdasarkan type deployment
-      let serviceName = '';
-      let gitUrl = '';
-      if (type === 'logrotate') {
-        serviceName = 'logrotate';
-        return await deployLogRotate();
-      } else if (type === 'API_CORE') {
-        serviceName = setting.appName;
-        gitUrl = 'https://gitlab.com/mertrack/mertrack-core';
-      } else {
-        serviceName = 'BPOM_API';
-        gitUrl = 'https://gitlab.com/gesang/connector-bpom';
+      let deploy_info = JSON.parse(
+        JSON.stringify(DEPLOY_APPS.find((it) => it.key === type)),
+      );
+      if (deploy_info.key == 'API_CORE') {
+        deploy_info.title = setting.appName;
+        deploy_info.port = setting.backendPort;
+      } else if (deploy_info.key == 'API_BPOM') {
+        deploy_info.title = setting.bpomAppName;
+        deploy_info.port = setting.bpomAppPort;
       }
       // =====================================================
-      // HAPUS SERVICE DIR
+      // JIKA logrotate CUKUP SAMPAI SINI
       // =====================================================
-      if (serviceName !== 'BPOM_API') {
+      if (deploy_info.key === 'logrotate') {
+        return await deployLogRotate();
+      }
+
+      // =====================================================
+      // HAPUS SERVICE DIR JIKA BUKAN API_BPOM
+      // =====================================================
+      if (deploy_info.key !== 'API_BPOM') {
         appendLog('Cleaning service directory...');
         await runCommand(
           ['/C', 'rmdir', '/S', '/Q', serviceDir],
@@ -258,24 +260,20 @@ export default function TabPm2() {
         );
       }
       // =====================================================
-      // MEMBENTUK URL AUTHENTICATION GIT
+      // CLONE AND BUILD FUNCTION
       // =====================================================
-      const authUrl = gitUrl.replace(
-        'https://',
-        `https://${encodeURIComponent(gitForm.username)}:${encodeURIComponent(gitForm.password)}@`,
-      );
-      await buildBackend(authUrl, serviceName);
+      await buildBackend(deploy_info);
       // =====================================================
       // INSTALL NODE MODULES DI SERVICE PRODUCTION
       // =====================================================
-      if (serviceName !== 'BPOM_API') {
+      if (type !== 'API_BPOM') {
         appendLog('Installing production dependencies...');
         await runCommand(['/C', 'npm', 'install', '--omit=dev'], serviceDir);
       }
       // =====================================================
       // DEPLOY KE PM2
       // =====================================================
-      await deployBackend(serviceName);
+      await deployBackend(deploy_info);
       // =====================================================
       // HAPUS TEMP DIRECTORY
       // =====================================================
@@ -284,11 +282,12 @@ export default function TabPm2() {
         ['/C', 'rmdir', '/S', '/Q', tempDir],
         setting.workingDirectory,
       );
+      showAlert('Deployment success', 'success');
     } catch (err) {
       showAlert(`${err}`, 'error');
+      appendLog(`Deployment failed`);
     } finally {
       setDeployLoading('');
-      showAlert(`Deployment success`, 'success');
       appendLog('Done deployment process');
     }
   };
@@ -299,7 +298,8 @@ export default function TabPm2() {
     return;
   };
 
-  const deployBackend = async (serviceName) => {
+  const deployBackend = async (options) => {
+    const { key, title, port, git_url } = options;
     try {
       // =====================================================
       // CHECK PM2 SERVICE
@@ -314,15 +314,15 @@ export default function TabPm2() {
       // RELOAD ATAU START PM2
       // =====================================================
       // Jika service sudah ada
-      if (pm2.stdout.includes(`"name":"${serviceName}"`)) {
+      if (pm2.stdout.includes(`"name":"${title}"`)) {
         appendLog('Reloading PM2 service...');
         // Reload PM2
-        await runCommand(['/C', 'pm2', 'reload', serviceName], serviceDir);
+        await runCommand(['/C', 'pm2', 'reload', title], serviceDir);
       } else {
         appendLog('Starting PM2 service...');
         // Start PM2 baru
         await runCommand(
-          ['/C', 'pm2', 'start', `${serviceName}.js`, '--name', serviceName],
+          ['/C', 'pm2', 'start', `${title}.js`, '--name', title],
           serviceDir,
         );
       }
@@ -334,14 +334,15 @@ export default function TabPm2() {
       appendLog('Deployment success');
       // Refresh table PM2
       fetchPm2List();
-      // Alert success
-      showAlert('Deployment success', 'success');
     } catch (err) {
       showAlert(`${err}`, 'error');
+      throw err;
     }
   };
 
-  const buildBackend = async (url, serviceName) => {
+  const buildBackend = async (options) => {
+    const { key, title, port, git_url } = options;
+
     try {
       // =====================================================
       // MENENTUKAN DIRECTORY
@@ -351,27 +352,24 @@ export default function TabPm2() {
       // CLONE REPOSITORY
       // =====================================================
       appendLog('Cloning repository...');
-      let param = { ...gitForm, directory: tempDir };
-      if (serviceName == 'BPOM_API') {
-        await gitCloneBpom(param);
-      } else {
-        if (setting.backendBranch) {
-          await gitCloneBe({ ...param, branch: setting.backendBranch });
-        } else {
-          await gitCloneBe({ ...param });
-        }
+      let param = { ...options, ...gitForm, directory: tempDir };
+      if (key == 'API_CORE' && setting.backendBranch) {
+        param = { ...param, branch: setting.backendBranch };
       }
+      await gitClone(param);
+
       // =====================================================
       // UPDATE FILE .ENV
       // =====================================================
-      await updateFileEnv(`${tempDir}`, serviceName);
+      await updateFileEnv(`${tempDir}`, options);
       // =====================================================
       // UPDATE FILES PACKAGE.JSON
       // =====================================================
       appendLog('Updating package.json file...');
       const packageJson = JSON.parse(await readTextFile(packagePath));
-      packageJson.name = serviceName;
+      packageJson.name = title;
       await writeTextFile(packagePath, JSON.stringify(packageJson, null, 2));
+
       // =====================================================
       // INSTALL DEPENDENCIES DI TEMP FOLDER
       // =====================================================
@@ -392,16 +390,18 @@ export default function TabPm2() {
       );
     } catch (err) {
       showAlert(`${err}`, 'error');
+      throw err;
     }
   };
 
-  const updateFileEnv = async (path, serviceName) => {
+  const updateFileEnv = async (path, options) => {
+    const { key, title, git_url } = options;
     // =====================================================
     // UPDATE FILE .ENV
     // =====================================================
     appendLog('Updating .env file...');
     let envField = {
-      APP_NAME: serviceName,
+      APP_NAME: setting.appName,
       APP_PORT: setting.backendPort,
       APP_TIMEZONE: setting.timezone,
 
@@ -415,7 +415,11 @@ export default function TabPm2() {
       BPOM_URL: setting.bpomUrl,
       BPOM_EMAIL: setting.bpomEmail,
       BPOM_PASSWORD: setting.bpomPassword,
+
+      CONNECTOR_BPOM: setting.bpomAppPort,
+      CONNECTOR_BPOM_NAME: setting.bpomAppName,
     };
+
     const envPath = `${path}\\.env`;
     let currentEnv = '';
     try {

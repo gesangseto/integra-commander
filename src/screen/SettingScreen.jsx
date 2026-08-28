@@ -371,60 +371,6 @@ function SettingScreen() {
         </Box>
       </Box>
       {/* ========================================================= */}
-      {/* ================= BPOM CONFIG =========================== */}
-      {/* ========================================================= */}
-      <Box mt={3}>
-        <Typography variant="h6" fontWeight="bold" mb={2}>
-          BPOM Config
-        </Typography>
-        <Box>
-          <Grid container spacing={2}>
-            <Grid size={4}>
-              <TextField
-                size="small"
-                select
-                fullWidth
-                label="Target"
-                value={
-                  form.bpomUrl || 'https://ttacdev.pom.go.id/dev/public/api/v3/'
-                }
-                onChange={(e) => handleChange('bpomUrl', e.target.value)}
-              >
-                {listBpomUrl.map((tz) => (
-                  <MenuItem key={tz.value} value={tz.value}>
-                    {tz.label}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={4}>
-              <TextField
-                size="small"
-                fullWidth
-                label="BPOM Email"
-                type="email"
-                value={form.bpomEmail || ''}
-                helperText="Tidak boleh menggunakan spasi"
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\s/g, '');
-                  handleChange('bpomEmail', value);
-                }}
-              />
-            </Grid>
-            <Grid size={4}>
-              <TextField
-                size="small"
-                fullWidth
-                type="password"
-                label="BPOM Password"
-                value={form.bpomPassword || ''}
-                onChange={(e) => handleChange('bpomPassword', e.target.value)}
-              />
-            </Grid>
-          </Grid>
-        </Box>
-      </Box>
-      {/* ========================================================= */}
       {/* ================= DATABASE SETUP =========================== */}
       {/* ========================================================= */}
       <Divider sx={{ mt: 3 }} />
@@ -556,6 +502,97 @@ function SettingScreen() {
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}></Grid>
         </Grid>
+      </Box>
+
+      {/* ========================================================= */}
+      {/* ================= CONNECTOR / BPOM CONFIG ============== */}
+      {/* ========================================================= */}
+      <Divider sx={{ mt: 3 }} />
+      <Box mt={2}>
+        <Typography variant="h6" fontWeight="bold" mb={2}>
+          Connector
+        </Typography>
+
+        {/* ========================================================= */}
+        {/* ================= BPOM CONFIG =========================== */}
+        {/* ========================================================= */}
+        <Box mt={3}>
+        <Typography variant="h6" fontWeight="bold" mb={2}>
+          BPOM Config
+        </Typography>
+        <Box>
+          <Grid container spacing={2}>
+            <Grid size={4}>
+              <TextField
+                size="small"
+                select
+                fullWidth
+                label="Target"
+                value={
+                  form.bpomUrl || 'https://ttacdev.pom.go.id/dev/public/api/v3/'
+                }
+                onChange={(e) => handleChange('bpomUrl', e.target.value)}
+              >
+                {listBpomUrl.map((tz) => (
+                  <MenuItem key={tz.value} value={tz.value}>
+                    {tz.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid size={4}>
+              <TextField
+                size="small"
+                fullWidth
+                label="BPOM Email"
+                type="email"
+                value={form.bpomEmail || ''}
+                helperText="Tidak boleh menggunakan spasi"
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\s/g, '');
+                  handleChange('bpomEmail', value);
+                }}
+              />
+            </Grid>
+            <Grid size={4}>
+              <TextField
+                size="small"
+                fullWidth
+                type="password"
+                label="BPOM Password"
+                value={form.bpomPassword || ''}
+                onChange={(e) => handleChange('bpomPassword', e.target.value)}
+              />
+            </Grid>
+            <Grid size={4}>
+              <TextField
+                size="small"
+                fullWidth
+                label="BPOM App Name"
+                value={form.bpomAppName || ''}
+                helperText="Tidak boleh menggunakan spasi"
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\s/g, '');
+                  handleChange('bpomAppName', value);
+                }}
+              />
+            </Grid>
+            <Grid size={4}>
+              <TextField
+                size="small"
+                fullWidth
+                label="BPOM App Port"
+                value={form.bpomAppPort || ''}
+                helperText="Hanya angka"
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  handleChange('bpomAppPort', value);
+                }}
+              />
+            </Grid>
+          </Grid>
+        </Box>
+      </Box>
       </Box>
       {/* ========================================================= */}
       {/* ================= ACTION ================================ */}
