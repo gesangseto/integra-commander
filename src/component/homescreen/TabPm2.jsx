@@ -552,9 +552,7 @@ export default function TabPm2() {
                   />
                 </TableCell>
 
-                <TableCell>
-                  {formatUptime(proc.pm2_env.pm_uptime)} Minutes
-                </TableCell>
+                <TableCell>{formatUptime(proc.pm2_env.pm_uptime)}</TableCell>
                 <TableCell>
                   {(proc.monit.memory / 1024 / 1024).toFixed(1)} MB
                 </TableCell>
