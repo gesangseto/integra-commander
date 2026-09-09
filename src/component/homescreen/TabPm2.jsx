@@ -655,9 +655,23 @@ export default function TabPm2() {
 
         <Box display="flex" gap={1}>
           <Tooltip title="Clear Cache">
-            <Button color="warning" onClick={handleClearNpmCache}>
+            <Box
+              onClick={handleClearNpmCache}
+              sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                p: 1,
+                border: 1,
+                borderColor: 'warning.main',
+                borderRadius: 1,
+                color: 'warning.main',
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'action.hover' },
+              }}
+            >
               <CleaningServices />
-            </Button>
+            </Box>
           </Tooltip>
           <Button
             color="success"
