@@ -1,5 +1,6 @@
 import {
   Article,
+  CleaningServices,
   Delete,
   Refresh,
   RocketLaunch,
@@ -220,6 +221,32 @@ export default function TabPm2() {
       await syncPm2Session();
       fetchPm2List();
       showAlert('PM2 session saved successfully', 'success');
+    } catch (error) {
+      showAlert(`${error}`, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Membersihkan cache npm (`npm cache clean --force`) dengan konfirmasi
+   * terlebih dahulu, lalu menampilkan notifikasi hasilnya.
+   * @returns {Promise<void>}
+   */
+  const handleClearNpmCache = async () => {
+    const ok = await showConfirm({
+      title: 'Clear NPM Cache',
+      message: 'Apakah anda yakin ingin membersihkan cache npm?',
+      severity: 'danger',
+    });
+    if (!ok) return;
+    setIsLoading(true);
+    try {
+      await runCommand(
+        ['/C', 'npm', 'cache', 'clean', '--force'],
+        setting.workingDirectory,
+      );
+      showAlert('NPM cache cleared successfully', 'success');
     } catch (error) {
       showAlert(`${error}`, 'error');
     } finally {
@@ -627,6 +654,14 @@ export default function TabPm2() {
         </Typography>
 
         <Box display="flex" gap={1}>
+          <Button
+            color="warning"
+            variant="outlined"
+            startIcon={<CleaningServices />}
+            onClick={handleClearNpmCache}
+          >
+            Clear NPM Cache
+          </Button>
           <Button
             color="success"
             variant="outlined"
