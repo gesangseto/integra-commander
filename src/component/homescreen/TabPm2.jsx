@@ -1,7 +1,6 @@
 import {
   Article,
   Delete,
-  FolderOpen,
   Refresh,
   RocketLaunch,
   Stop,
@@ -42,6 +41,16 @@ import { useAlert } from '../AlertProvider';
 import { useConfirm } from '../ConfirmProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
 
+/**
+ * Daftar aplikasi yang dapat di-deploy melalui tab PM2 Management.
+ *
+ * @constant
+ * @type {Array<{key: string, title: string, description: string, git_url: string|null}>}
+ * @property {string} key          - Identifikasi unik jenis deployment (dipakai sebagai `type` di handleDeploy).
+ * @property {string} title        - Judul yang ditampilkan di UI.
+ * @property {string} description  - Deskripsi singkat untuk UI.
+ * @property {string|null} git_url - URL repository Git. `null` untuk jenis yang tidak butuh clone (mis. logrotate).
+ */
 const DEPLOY_APPS = [
   {
     key: 'API_CORE',
@@ -63,6 +72,28 @@ const DEPLOY_APPS = [
   },
 ];
 
+/**
+ * Komponen utama untuk manajemen proses PM2.
+ *
+ * Menyediakan:
+ * - Tabel daftar proses PM2 (auto-refresh tiap 10 detik)
+ * - Aksi per proses: monitor log, update .env, stop, restart, delete
+ * - Dialog deployment untuk API_CORE, API_BPOM, dan logrotate
+ * - Dialog autentikasi Git sebelum clone repository
+ *
+ * Alur deployment (API_CORE / API_BPOM):
+ *   1. Bersihkan folder temp
+ *   2. Clone repository ke folder temp
+ *   3. Tulis file .env dari setting aplikasi
+ *   4. `npm install` + `npm run build` di folder temp
+ *   5. Salin hasil build ke folder services (overwrite, folder services TIDAK dihapus)
+ *   6. `npm install --omit=dev` di folder services (kecuali API_BPOM)
+ *   7. Start/reload proses PM2
+ *   8. Bersihkan folder temp
+ *
+ * @component
+ * @returns {JSX.Element} UI manajemen PM2
+ */
 export default function TabPm2() {
   const { showAlert } = useAlert();
   const { confirm: showConfirm } = useConfirm();
@@ -77,9 +108,6 @@ export default function TabPm2() {
 
   const [openDeployDialog, setOpenDeployDialog] = useState(false);
 
-  const [envContent, setEnvContent] = useState('');
-  const [currentEnvPath, setCurrentEnvPath] = useState('');
-  const [activeAppName, setActiveAppName] = useState('');
   const [openLogViewer, setOpenLogViewer] = useState(false);
   const [selectedProcess, setSelectedProcess] = useState(null);
 
@@ -88,7 +116,6 @@ export default function TabPm2() {
 
   const tempDir = `${setting.workingDirectory}\\temp`;
   const serviceDir = `${setting.workingDirectory}\\services`;
-  const packagePath = `${tempDir}\\package.json`;
 
   useEffect(() => {
     fetchPm2List();
@@ -96,6 +123,10 @@ export default function TabPm2() {
     return () => clearInterval(interval);
   }, []);
 
+  /**
+   * Menambahkan pesan log ke state `deployLogs` dengan timestamp lokal.
+   * @param {string} msg - Pesan yang akan ditambahkan ke log deployment.
+   */
   const appendLog = (msg) => {
     setDeployLogs((prev) => [
       ...prev,
@@ -103,6 +134,16 @@ export default function TabPm2() {
     ]);
   };
 
+  /**
+   * Menjalankan perintah shell melalui plugin Tauri `run-command`.
+   * Mencatat perintah + stderr ke log deployment, dan melempar error
+   * jika exit code != 0 (agar kegagalan build/install tidak lolos diam-diam).
+   *
+   * @param {string[]} args - Argumen perintah (diawali `/C` untuk cmd.exe).
+   * @param {string} cwd    - Working directory tempat perintah dijalankan.
+   * @returns {Promise<import('@tauri-apps/plugin-shell').CommandOutput>} Output perintah.
+   * @throws {Error} Jika perintah gagal (exit code != 0).
+   */
   const runCommand = async (args, cwd) => {
     appendLog(args.join(' '));
     const cmd = Command.create('run-command', args, {
@@ -112,8 +153,20 @@ export default function TabPm2() {
     if (output.stderr) {
       appendLog(output.stderr);
     }
+    if (output.code !== 0) {
+      throw new Error(
+        output.stderr || output.stdout || `Command failed (${output.code})`,
+      );
+    }
     return output;
   };
+  /**
+   * Mengambil daftar proses PM2 (`pm2 jlist`) dan memperkaya data
+   * dengan `rootPath` (direktori script) serta `scriptPath`.
+   * Dipanggil saat mount dan di-refresh otomatis tiap 10 detik.
+   *
+   * @returns {Promise<void>}
+   */
   const fetchPm2List = async () => {
     try {
       const pm2 = Command.create('run-command', ['/C', 'pm2', 'jlist']);
@@ -143,6 +196,11 @@ export default function TabPm2() {
       showAlert(`${error}`, 'error');
     }
   };
+  /**
+   * Menyimpan session PM2 ke disk (`pm2 save --force`) agar daftar proses
+   * tetap ada setelah server/PC di-restart.
+   * @returns {Promise<void>}
+   */
   const syncPm2Session = async () => {
     await Command.create('run-command', [
       '/C',
@@ -152,6 +210,10 @@ export default function TabPm2() {
     ]).execute();
   };
 
+  /**
+   * Menyimpan session PM2 dan menampilkan notifikasi hasilnya.
+   * @returns {Promise<void>}
+   */
   const handleSavePm2 = async () => {
     setIsLoading(true);
     try {
@@ -165,6 +227,14 @@ export default function TabPm2() {
     }
   };
 
+  /**
+   * Menjalankan aksi PM2 (stop/restart/delete) pada proses tertentu,
+   * lalu me-refresh tabel setelah jeda 500ms.
+   *
+   * @param {'stop'|'restart'|'delete'} action - Aksi PM2 yang dijalankan.
+   * @param {string} identifier - Nama proses PM2 target.
+   * @returns {Promise<void>}
+   */
   const handlePm2Action = async (action, identifier) => {
     setIsLoading(true);
     try {
@@ -188,29 +258,41 @@ export default function TabPm2() {
     }
   };
 
+  /**
+   * Memperbarui file `.env` pada folder services proses PM2,
+   * lalu me-restart proses tersebut agar konfigurasi baru diterapkan.
+   *
+   * @param {Object} item - Objek proses PM2 (dari `pm2List`), memakai `item.name`.
+   * @returns {Promise<void>}
+   */
   const handleReloadEnv = async (item) => {
     try {
-      await updateFileEnv(`${serviceDir}`, item.name);
+      await updateFileEnv(`${serviceDir}`);
       await handlePm2Action('restart', item.name);
     } catch (error) {
       showAlert(`${error}`, 'error');
     }
   };
 
-  const handleOpenExternalMonit = async (procId) => {
-    try {
-      await Command.create('run-command', [
-        '/C',
-        'start',
-        'cmd',
-        '/k',
-        `pm2 monit ${procId}`,
-      ]).execute();
-    } catch (error) {
-      showAlert(`${error}`, 'error');
-    }
-  };
-
+  /**
+   * Menjalankan proses deployment aplikasi berdasarkan tipe yang dipilih.
+   *
+   * Alur umum:
+   * 1. Bersihkan folder temp (jika ada).
+   * 2. Tentukan nama service & port dari setting (API_CORE / API_BPOM).
+   * 3. Untuk `logrotate` → langsung install pm2-logrotate dan selesai.
+   * 4. Clone + build aplikasi ke folder temp (`buildBackend`).
+   * 5. Install dependency produksi di folder services (kecuali API_BPOM).
+   * 6. Start/reload proses PM2 (`deployBackend`).
+   * 7. Bersihkan folder temp.
+   *
+   * Catatan: Folder `services` TIDAK dihapus selama deployment —
+   * hasil build hanya di-overwrite di atas isi folder yang sudah ada
+   * (file seperti `.env` dan `node_modules` yang sudah ada tetap dipertahankan).
+   *
+   * @param {string} type - Kunci deployment dari `DEPLOY_APPS` ('API_CORE' | 'API_BPOM' | 'logrotate').
+   * @returns {Promise<void>}
+   */
   const handleDeploy = async (type) => {
     try {
       // Hapus folder temp
@@ -232,9 +314,11 @@ export default function TabPm2() {
       // MENENTUKAN NAMA SERVICE DAN PORT
       // =====================================================
       // Tentukan nama PM2 service berdasarkan type deployment
-      let deploy_info = JSON.parse(
-        JSON.stringify(DEPLOY_APPS.find((it) => it.key === type)),
-      );
+      const deployApp = DEPLOY_APPS.find((it) => it.key === type);
+      if (!deployApp) {
+        throw new Error(`Unknown deployment type: ${type}`);
+      }
+      let deploy_info = JSON.parse(JSON.stringify(deployApp));
       if (deploy_info.key == 'API_CORE') {
         deploy_info.title = setting.appName;
         deploy_info.port = setting.backendPort;
@@ -250,16 +334,6 @@ export default function TabPm2() {
       }
 
       // =====================================================
-      // HAPUS SERVICE DIR JIKA BUKAN API_BPOM
-      // =====================================================
-      if (deploy_info.key !== 'API_BPOM') {
-        appendLog('Cleaning service directory...');
-        await runCommand(
-          ['/C', 'rmdir', '/S', '/Q', serviceDir],
-          setting.workingDirectory,
-        );
-      }
-      // =====================================================
       // CLONE AND BUILD FUNCTION
       // =====================================================
       await buildBackend(deploy_info);
@@ -274,32 +348,52 @@ export default function TabPm2() {
       // DEPLOY KE PM2
       // =====================================================
       await deployBackend(deploy_info);
-      // =====================================================
-      // HAPUS TEMP DIRECTORY
-      // =====================================================
-      appendLog('Cleaning temp directory...');
-      await runCommand(
-        ['/C', 'rmdir', '/S', '/Q', tempDir],
-        setting.workingDirectory,
-      );
       showAlert('Deployment success', 'success');
     } catch (err) {
       showAlert(`${err}`, 'error');
       appendLog(`Deployment failed`);
     } finally {
+      // =====================================================
+      // HAPUS TEMP DIRECTORY (SELALU DIJALANKAN)
+      // =====================================================
+      // Folder temp bekas build dihapus di blok `finally` agar
+      // tetap dibersihkan baik deployment sukses maupun gagal.
+      appendLog('Cleaning temp directory...');
+      await runCommand(
+        ['/C', 'rmdir', '/S', '/Q', tempDir],
+        setting.workingDirectory,
+      ).catch(() => {});
       setDeployLoading('');
       appendLog('Done deployment process');
     }
   };
 
+  /**
+   * Menginstall modul PM2 logrotate untuk rotasi log otomatis.
+   * @returns {Promise<void>}
+   */
   const deployLogRotate = async () => {
     await runCommand(['/C', 'pm2', 'install', 'pm2-logrotate'], 'C:\\');
     appendLog('Logrotate installed');
     return;
   };
 
+  /**
+   * Men-deploy aplikasi backend ke PM2:
+   * - Jika service sudah terdaftar → `pm2 reload`
+   * - Jika belum → `pm2 start <script>.js --name <title>` dari folder services
+   *
+   * Untuk API_CORE, nama file script diambil dari `package.json -> name`
+   * (mis. `mertrack-core.js`), sedangkan nama proses PM2 diambil dari
+   * settingStore -> appName (mis. `Integra`).
+   *
+   * @param {Object} options - Informasi deployment.
+   * @param {string} options.title - Nama service PM2 (dari settingStore -> appName untuk API_CORE).
+   * @param {string} [options.scriptName] - Nama file script tanpa ekstensi (dari package.json -> name, khusus API_CORE).
+   * @returns {Promise<void>}
+   */
   const deployBackend = async (options) => {
-    const { key, title, port, git_url } = options;
+    const { title, scriptName } = options;
     try {
       // =====================================================
       // CHECK PM2 SERVICE
@@ -313,16 +407,28 @@ export default function TabPm2() {
       // =====================================================
       // RELOAD ATAU START PM2
       // =====================================================
+      // Cek apakah service sudah terdaftar di PM2 (parse JSON, bukan string match)
+      let serviceExists = false;
+      try {
+        const pm2Processes = JSON.parse(pm2.stdout);
+        serviceExists = pm2Processes.some((proc) => proc.name === title);
+      } catch {
+        // Fallback ke string matching jika output bukan JSON valid
+        serviceExists = pm2.stdout.includes(`"name":"${title}"`);
+      }
       // Jika service sudah ada
-      if (pm2.stdout.includes(`"name":"${title}"`)) {
+      if (serviceExists) {
         appendLog('Reloading PM2 service...');
         // Reload PM2
         await runCommand(['/C', 'pm2', 'reload', title], serviceDir);
       } else {
         appendLog('Starting PM2 service...');
         // Start PM2 baru
+        // Nama file script: dari package.json -> name (khusus API_CORE),
+        // fallback ke nama service jika tidak tersedia.
+        const scriptFile = scriptName ? `${scriptName}.js` : `${title}.js`;
         await runCommand(
-          ['/C', 'pm2', 'start', `${title}.js`, '--name', title],
+          ['/C', 'pm2', 'start', scriptFile, '--name', title],
           serviceDir,
         );
       }
@@ -335,13 +441,33 @@ export default function TabPm2() {
       // Refresh table PM2
       fetchPm2List();
     } catch (err) {
-      showAlert(`${err}`, 'error');
       throw err;
     }
   };
 
+  /**
+   * Clone repository, tulis `.env`, install dependency, build, lalu
+   * salin hasil build ke folder services.
+   *
+   * Alur:
+   * 1. Clone repository (dengan branch opsional untuk API_CORE) ke folder temp.
+   * 2. Baca `package.json -> name` sebagai `options.scriptName` (khusus API_CORE)
+   *    untuk menentukan nama file entry PM2 (mis. `mertrack-core.js`).
+   * 3. Tulis file `.env` dari setting aplikasi.
+   * 4. `npm install` di folder temp.
+   * 5. `npm run build` di folder temp (output ke `temp/build`).
+   * 6. `xcopy` hasil build ke folder services dengan flag `/E /I /Y`
+   *    (overwrite file yang ada, folder services TIDAK dihapus).
+   *
+   * Catatan: `package.json` TIDAK dimodifikasi selama proses ini.
+   *
+   * @param {Object} options - Informasi deployment.
+   * @param {string} options.key - Kunci deployment ('API_CORE' | 'API_BPOM').
+   * @returns {Promise<void>}
+   * @throws {Error} Jika clone gagal atau perintah build/install gagal.
+   */
   const buildBackend = async (options) => {
-    const { key, title, port, git_url } = options;
+    const { key } = options;
 
     try {
       // =====================================================
@@ -356,20 +482,29 @@ export default function TabPm2() {
       if (key == 'API_CORE' && setting.backendBranch) {
         param = { ...param, branch: setting.backendBranch };
       }
-      await gitClone(param);
+      const cloneResult = await gitClone(param);
+      if (cloneResult.error) {
+        throw new Error(cloneResult.message);
+      }
+
+      // =====================================================
+      // AMBIL NAMA SCRIPT DARI PACKAGE.JSON (KHUSUS API_CORE)
+      // =====================================================
+      // Nama file entry PM2 diambil dari field `name` pada package.json
+      // hasil clone (mis. `mertrack-core` → `mertrack-core.js`).
+      // Nama proses PM2 tetap diambil dari settingStore -> appName.
+      if (key === 'API_CORE') {
+        const packageJson = JSON.parse(
+          await readTextFile(`${tempDir}\\package.json`),
+        );
+        options.scriptName = packageJson.name;
+        appendLog(`Script file: ${packageJson.name}.js`);
+      }
 
       // =====================================================
       // UPDATE FILE .ENV
       // =====================================================
-      await updateFileEnv(`${tempDir}`, options);
-      // =====================================================
-      // UPDATE FILES PACKAGE.JSON
-      // =====================================================
-      appendLog('Updating package.json file...');
-      const packageJson = JSON.parse(await readTextFile(packagePath));
-      packageJson.name = title;
-      await writeTextFile(packagePath, JSON.stringify(packageJson, null, 2));
-
+      await updateFileEnv(`${tempDir}`);
       // =====================================================
       // INSTALL DEPENDENCIES DI TEMP FOLDER
       // =====================================================
@@ -389,13 +524,19 @@ export default function TabPm2() {
         setting.workingDirectory,
       );
     } catch (err) {
-      showAlert(`${err}`, 'error');
       throw err;
     }
   };
 
-  const updateFileEnv = async (path, options) => {
-    const { key, title, git_url } = options;
+  /**
+   * Menulis / memperbarui file `.env` pada path tertentu berdasarkan
+   * setting aplikasi (nama app, port, database, BPOM, dll).
+   * Jika file belum ada, akan dibuat baru.
+   *
+   * @param {string} path - Direktori tempat file `.env` berada.
+   * @returns {Promise<void>}
+   */
+  const updateFileEnv = async (path) => {
     // =====================================================
     // UPDATE FILE .ENV
     // =====================================================
@@ -432,7 +573,15 @@ export default function TabPm2() {
     await writeTextFile(envPath, currentEnv);
   };
 
-  // helper update/add env
+  /**
+   * Helper untuk menambah / memperbarui satu key pada konten file `.env`.
+   * Jika key sudah ada → nilai diganti; jika belum → ditambahkan di akhir.
+   *
+   * @param {string} content - Konten file `.env` saat ini.
+   * @param {string} key - Nama variabel env.
+   * @param {string} value - Nilai variabel env.
+   * @returns {string} Konten `.env` yang sudah diperbarui.
+   */
   const setEnvValue = (content, key, value) => {
     const regex = new RegExp(`^${key}=.*$`, 'm');
     if (regex.test(content)) {
@@ -441,6 +590,13 @@ export default function TabPm2() {
     return `${content.trim()}\n${key}=${value}\n`;
   };
 
+  /**
+   * Memformat timestamp uptime (ms) menjadi string yang mudah dibaca,
+   * mis. `2d 3h`, `5h 30m`, `10m 5s`, `45s`.
+   *
+   * @param {number} timestamp - Timestamp uptime dalam milidetik (dari PM2).
+   * @returns {string} Uptime terformat.
+   */
   const formatUptime = (timestamp) => {
     if (!timestamp) return '0s';
     const uptimeMs = Date.now() - timestamp;
@@ -460,11 +616,6 @@ export default function TabPm2() {
     return `${seconds}s`;
   };
 
-  const updatePackageJson = async (path, data) => {
-    const packageJson = JSON.parse(await readTextFile(path));
-    Object.assign(packageJson, data);
-    await writeTextFile(path, JSON.stringify(packageJson, null, 2));
-  };
   return (
     <Box mt={2}>
       <Box display="flex" justifyContent="space-between" mb={2}>
@@ -742,40 +893,3 @@ export default function TabPm2() {
     </Box>
   );
 }
-
-const PathRow = ({ label, path, onOpen }) => (
-  <Box sx={{ mb: 2 }}>
-    <Box
-      sx={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        mb: 0.5,
-      }}
-    >
-      <Typography
-        variant="caption"
-        color="textSecondary"
-        sx={{ fontWeight: 600 }}
-      >
-        {label}
-      </Typography>
-
-      <Button size="small" startIcon={<FolderOpen />} onClick={onOpen}>
-        Open Folder
-      </Button>
-    </Box>
-
-    <Typography
-      variant="body2"
-      sx={{
-        fontFamily: 'monospace',
-        bgcolor: '#fff',
-        p: 1,
-        borderRadius: 1,
-        border: '1px dashed #ccc',
-      }}
-    >
-      {path}
-    </Typography>
-  </Box>
-);
