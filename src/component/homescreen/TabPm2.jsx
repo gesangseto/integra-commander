@@ -655,9 +655,9 @@ export default function TabPm2() {
 
         <Box display="flex" gap={1}>
           <Tooltip title="Clear Cache">
-            <IconButton color="warning" onClick={handleClearNpmCache}>
+            <Button color="warning" onClick={handleClearNpmCache}>
               <CleaningServices />
-            </IconButton>
+            </Button>
           </Tooltip>
           <Button
             color="success"
