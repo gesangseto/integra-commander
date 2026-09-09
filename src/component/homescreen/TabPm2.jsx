@@ -32,7 +32,7 @@ import {
 } from '@mui/material';
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Pm2LogViewer from '../Pm2LogViewer';
 
 import { useSettingStore } from '../../store/settingStore';
@@ -114,6 +114,13 @@ export default function TabPm2() {
 
   const [deployLoading, setDeployLoading] = useState('');
   const [deployLogs, setDeployLogs] = useState([]);
+  const deployLogsRef = useRef(null);
+
+  // Auto-scroll Deployment Logs ke bawah setiap ada log baru
+  useEffect(() => {
+    const el = deployLogsRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [deployLogs]);
 
   const tempDir = `${setting.workingDirectory}\\temp`;
   const serviceDir = `${setting.workingDirectory}\\services`;
@@ -901,6 +908,7 @@ export default function TabPm2() {
           </Typography>
 
           <Paper
+            ref={deployLogsRef}
             variant="outlined"
             sx={{
               p: 2,
