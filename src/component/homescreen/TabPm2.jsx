@@ -383,13 +383,13 @@ export default function TabPm2() {
    * - Jika service sudah terdaftar → `pm2 reload`
    * - Jika belum → `pm2 start <script>.js --name <title>` dari folder services
    *
-   * Untuk API_CORE, nama file script diambil dari `package.json -> name`
-   * (mis. `mertrack-core.js`), sedangkan nama proses PM2 diambil dari
-   * settingStore -> appName (mis. `Integra`).
+   * Untuk API_CORE dan API_BPOM, nama file script diambil dari
+   * `package.json -> name` (mis. `mertrack-core.js`), sedangkan nama
+   * proses PM2 diambil dari settingStore -> appName (mis. `Integra`).
    *
    * @param {Object} options - Informasi deployment.
    * @param {string} options.title - Nama service PM2 (dari settingStore -> appName untuk API_CORE).
-   * @param {string} [options.scriptName] - Nama file script tanpa ekstensi (dari package.json -> name, khusus API_CORE).
+   * @param {string} [options.scriptName] - Nama file script tanpa ekstensi (dari package.json -> name, khusus API_CORE dan API_BPOM).
    * @returns {Promise<void>}
    */
   const deployBackend = async (options) => {
@@ -424,7 +424,7 @@ export default function TabPm2() {
       } else {
         appendLog('Starting PM2 service...');
         // Start PM2 baru
-        // Nama file script: dari package.json -> name (khusus API_CORE),
+        // Nama file script: dari package.json -> name (khusus API_CORE dan API_BPOM),
         // fallback ke nama service jika tidak tersedia.
         const scriptFile = scriptName ? `${scriptName}.js` : `${title}.js`;
         await runCommand(
@@ -451,7 +451,7 @@ export default function TabPm2() {
    *
    * Alur:
    * 1. Clone repository (dengan branch opsional untuk API_CORE) ke folder temp.
-   * 2. Baca `package.json -> name` sebagai `options.scriptName` (khusus API_CORE)
+   * 2. Baca `package.json -> name` sebagai `options.scriptName` (khusus API_CORE dan API_BPOM)
    *    untuk menentukan nama file entry PM2 (mis. `mertrack-core.js`).
    * 3. Tulis file `.env` dari setting aplikasi.
    * 4. `npm install` di folder temp.
@@ -488,12 +488,15 @@ export default function TabPm2() {
       }
 
       // =====================================================
-      // AMBIL NAMA SCRIPT DARI PACKAGE.JSON (KHUSUS API_CORE)
+      // AMBIL NAMA SCRIPT DARI PACKAGE.JSON (KHUSUS API_CORE DAN API_BPOM)
       // =====================================================
       // Nama file entry PM2 diambil dari field `name` pada package.json
       // hasil clone (mis. `mertrack-core` → `mertrack-core.js`).
       // Nama proses PM2 tetap diambil dari settingStore -> appName.
-      if (key === 'API_CORE') {
+      // PENTING: package.json dibaca SEBELUM build (langsung dari hasil
+      // clone), bukan dari hasil build/copy — karena `npm run build` bisa
+      // menimpa/menghapus package.json di folder build.
+      if (key === 'API_CORE' || key === 'API_BPOM') {
         const packageJson = JSON.parse(
           await readTextFile(`${tempDir}\\package.json`),
         );
