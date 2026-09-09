@@ -25,6 +25,16 @@
         }
       ]
     },
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "run-command",
+          "cmd": "cmd",
+          "args": true
+        }
+      ]
+    },
     "fs:allow-read-file",
     "fs:allow-write-file",
     "fs:allow-read-text-file",
