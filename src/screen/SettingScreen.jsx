@@ -353,6 +353,19 @@ function SettingScreen() {
                 ))}
               </TextField>
             </Grid>
+            <Grid size={4}>
+              <TextField
+                size="small"
+                select
+                fullWidth
+                label="App Mode"
+                value={form.appMode || 'development'}
+                onChange={(e) => handleChange('appMode', e.target.value)}
+              >
+                <MenuItem value="development">Development</MenuItem>
+                <MenuItem value="production">Production</MenuItem>
+              </TextField>
+            </Grid>
 
             {/* <Grid size={4}>
               <FormControlLabel

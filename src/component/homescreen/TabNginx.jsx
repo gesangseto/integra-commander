@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import {
+  Delete,
   Folder,
   FolderOpen,
   PlayArrow,
@@ -48,45 +49,38 @@ import { openLocation } from '../../utility';
 import { useAlert } from '../AlertProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
 import { gitCloneFe } from '../../utility/gitUtility';
+import { useConfirm } from '../ConfirmProvider';
 
 const DEPLOY_APPS = [
   {
     key: 'frontend',
-    title: 'Install / Update Mertrack Frontned',
+    title: 'Install / Update Mertrack Frontend',
     description: 'Install + nginx',
   },
 ];
 
+const FRONTEND_CONFIG_FILE = 'MERTRACK-FRONTEND.conf';
+
 export default function TabNginx() {
   const { showAlert } = useAlert();
+  const { confirm: showConfirm } = useConfirm();
   const { nginxPath, setNginxPath } = useAppStore();
   const [NGINX_CONF_DIR, setNGINX_CONF_DIR] = useState(
     `${nginxPath}\\conf\\sites-enabled`,
   );
   const setting = useSettingStore((state) => state.form);
   const [gitForm, setGitForm] = useState({ username: '', password: '' });
-  const [isLoading, setIsLoading] = useState(false);
   const [openGitDialog, setOpenGitDialog] = useState(false);
   const [selectedDeploy, setSelectedDeploy] = useState('');
   const [openDeployDialog, setOpenDeployDialog] = useState(false);
   const [deployLoading, setDeployLoading] = useState('');
+  const [deletingConfig, setDeletingConfig] = useState('');
   const [deployLogs, setDeployLogs] = useState([]);
 
   const [nginxList, setNginxList] = useState([]);
-  const [openNginxForm, setOpenNginxForm] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
 
   const tempDir = `${setting.workingDirectory}\\temp`;
   const serviceDir = `${setting.workingDirectory}\\public`;
-
-  const [nginxForm, setNginxForm] = useState({
-    id: null,
-    name: '',
-    port: '80',
-    domain: '',
-    target: '',
-    rootPath: `${nginxPath}`, // Default root path
-  });
   useEffect(() => {
     if (nginxPath) {
       setNGINX_CONF_DIR(`${nginxPath}\\conf\\sites-enabled`);
@@ -141,7 +135,7 @@ export default function TabNginx() {
           const proxyMatch = content.match(/proxy_pass\s+(.+);/);
 
           tempList.push({
-            id: Math.random(), // ID sementara untuk UI
+            id: entry.name,
             name: entry.name.replace('.conf', ''),
             fileName: entry.name,
             domain: domainMatch ? domainMatch[1] : 'N/A',
@@ -173,31 +167,49 @@ export default function TabNginx() {
       console.error('Gagal memilih folder:', error);
     }
   };
-  // Fungsi pilih folder root untuk setiap host
-  const handleSelectRoot = async () => {
-    try {
-      const selected = await open({ multiple: false, directory: true });
-      if (selected) {
-        setNginxForm({ ...nginxForm, rootPath: selected });
-      }
-    } catch (error) {
-      console.error('Error selecting root folder:', error);
-    }
-  };
 
-  const reloadNginx = async () => {
+  const reloadNginx = async ({
+    notifySuccess = true,
+    notifyError = true,
+  } = {}) => {
     try {
-      let args = ['/C', 'nginx', '-p', nginxPath, '-s', 'reload'];
-      const cmd = Command.create('run-command', args);
-      const output = await cmd.execute();
-      if (output.code === 0) showAlert('Nginx reload Successfully.', 'success');
-      else
-        showAlert(
-          'Failed to reload Nginx. Please ensure nginx.exe is running and located in the correct PATH.',
-          'error',
+      if (!nginxPath) throw new Error('Nginx path belum dikonfigurasi.');
+
+      const validation = await Command.create('run-command', [
+        '/C',
+        'nginx',
+        '-p',
+        nginxPath,
+        '-t',
+      ]).execute();
+      if (validation.code !== 0) {
+        throw new Error(
+          validation.stderr ||
+            validation.stdout ||
+            'Konfigurasi Nginx tidak valid.',
         );
+      }
+
+      const output = await Command.create('run-command', [
+        '/C',
+        'nginx',
+        '-p',
+        nginxPath,
+        '-s',
+        'reload',
+      ]).execute();
+      if (output.code !== 0) {
+        throw new Error(
+          output.stderr ||
+            output.stdout ||
+            'Nginx gagal melakukan reload konfigurasi.',
+        );
+      }
+      if (notifySuccess) showAlert('Nginx reload successfully.', 'success');
+      return true;
     } catch (err) {
-      showAlert(`${err}`, 'error');
+      if (notifyError) showAlert(`${err}`, 'error');
+      return false;
     }
   };
 
@@ -206,6 +218,27 @@ export default function TabNginx() {
   };
 
   const handleDeploy = async (type) => {
+    if (!nginxPath || !setting.workingDirectory || !setting.frontendPort) {
+      showAlert(
+        'Nginx path, working directory, dan frontend port wajib dikonfigurasi sebelum deployment.',
+        'error',
+      );
+      return;
+    }
+
+    const frontendPort = Number(setting.frontendPort);
+    if (
+      !Number.isInteger(frontendPort) ||
+      frontendPort < 1 ||
+      frontendPort > 65535
+    ) {
+      showAlert('Frontend port harus berupa angka antara 1 dan 65535.', 'error');
+      return;
+    }
+
+    setDeployLoading(type);
+    setDeployLogs([]);
+
     try {
       // Hapus folder temp
       await runCommand(
@@ -215,21 +248,23 @@ export default function TabNginx() {
       // =====================================================
       // START DEPLOYMENT
       // =====================================================
-      setDeployLoading(type);
-      setDeployLogs([]);
       appendLog('Starting deployment...');
       // =====================================================
       // CLONE REPOSITORY
       // =====================================================
       appendLog('Cloning repository...');
+      let cloneResult;
       if (setting.frontendBranch) {
-        await gitCloneFe({
+        cloneResult = await gitCloneFe({
           ...gitForm,
           directory: tempDir,
           branch: setting.frontendBranch,
         });
       } else {
-        await gitCloneFe({ ...gitForm, directory: tempDir });
+        cloneResult = await gitCloneFe({ ...gitForm, directory: tempDir });
+      }
+      if (cloneResult.error) {
+        throw new Error(cloneResult.message);
       }
       // =====================================================
       // UPDATE FILE .ENV
@@ -269,9 +304,18 @@ export default function TabNginx() {
       // npm run build
       await runCommand(['/C', 'npm', 'run', 'build'], tempDir);
       // =====================================================
+      // COPY BUILD OUTPUT TO NGINX PUBLIC DIRECTORY
+      // =====================================================
+      appendLog('Copying build output to public directory...');
+      await runCommand(
+        ['/C', 'xcopy', `${tempDir}\\dist`, serviceDir, '/E', '/I', '/Y'],
+        setting.workingDirectory,
+      );
+      // =====================================================
       // UPDATE NGINX ACTIVE SITES
       // =====================================================
-      await handleSaveNginx();
+      const configSaved = await handleSaveNginx();
+      if (!configSaved) throw new Error('Gagal menyimpan konfigurasi Nginx.');
       // =====================================================
       // HAPUS TEMP DIRECTORY
       // =====================================================
@@ -281,11 +325,12 @@ export default function TabNginx() {
         ['/C', 'rmdir', '/S', '/Q', tempDir],
         setting.workingDirectory,
       );
+      showAlert('Deployment success', 'success');
     } catch (err) {
       showAlert(`${err}`, 'error');
+      appendLog(`Deployment failed: ${err}`);
     } finally {
       setDeployLoading('');
-      showAlert(`Deployment success`, 'success');
       appendLog('Done deployment process');
     }
   };
@@ -299,7 +344,7 @@ export default function TabNginx() {
         await mkdir(NGINX_CONF_DIR, { recursive: true });
       }
 
-      const fileName = `MERTRACK-FRONTEND.conf`;
+      const fileName = FRONTEND_CONFIG_FILE;
 
       // Gunakan join path manual yang aman untuk Windows
       const fullConfPath = `${NGINX_CONF_DIR.replace(/[\\/]$/, '')}\\${fileName}`;
@@ -319,22 +364,72 @@ export default function TabNginx() {
       await writeTextFile(fullConfPath, configContent);
 
       await fetchNginxList();
-      await reloadNginx();
-      setOpenNginxForm(false);
+      if (!(await reloadNginx({ notifySuccess: false, notifyError: false }))) {
+        throw new Error('Konfigurasi Nginx tidak disimpan karena validasi gagal.');
+      }
       showAlert('Configuration has been saved successfully!.', 'success');
+      return true;
     } catch (err) {
       showAlert(`${err}`, 'error');
+      return false;
     }
   };
 
   const handleDeleteNginx = async (item) => {
-    if (!window.confirm(`Hapus konfigurasi ${item.name}?`)) return;
+    if (deployLoading || deletingConfig) return;
+
+    const shouldDeleteConfig = await showConfirm({
+      title: 'Hapus Konfigurasi Frontend',
+      message: `Hapus konfigurasi Nginx "${item.name}"?`,
+      severity: 'danger',
+    });
+    if (!shouldDeleteConfig) return;
+
+    setDeletingConfig(item.fileName);
     try {
       await remove(`${NGINX_CONF_DIR}\\${item.fileName}`);
-      setNginxList(nginxList.filter((site) => site.id !== item.id));
-      await reloadNginx();
+      if (!(await reloadNginx({ notifySuccess: false, notifyError: false }))) {
+        throw new Error(
+          'Konfigurasi terhapus, tetapi Nginx gagal melakukan reload.',
+        );
+      }
+      await fetchNginxList();
+
+      const canDeleteDeployment =
+        item.fileName === FRONTEND_CONFIG_FILE &&
+        item.rootPath.replace(/[\\/]+$/, '').toLowerCase() ===
+          serviceDir.replace(/[\\/]+$/, '').toLowerCase();
+      let shouldDeleteDeployment = false;
+
+      if (canDeleteDeployment) {
+        shouldDeleteDeployment = await showConfirm({
+          title: 'Hapus File Deployment',
+          message: `Hapus seluruh file hasil deployment frontend di "${serviceDir}"? Jangan pilih OK jika folder tersebut digunakan aplikasi lain.`,
+          severity: 'danger',
+        });
+
+        if (shouldDeleteDeployment && (await exists(serviceDir))) {
+          const entries = await readDir(serviceDir);
+          await Promise.all(
+            entries.map((entry) =>
+              remove(`${serviceDir}\\${entry.name}`, { recursive: true }),
+            ),
+          );
+        }
+      }
+
+      showAlert(
+        shouldDeleteDeployment
+          ? 'Konfigurasi Nginx dan file frontend berhasil dihapus.'
+          : canDeleteDeployment
+            ? 'Konfigurasi Nginx berhasil dihapus. File frontend tetap dipertahankan.'
+            : 'Konfigurasi Nginx berhasil dihapus.',
+        'success',
+      );
     } catch (err) {
       showAlert(`${err}`, 'error');
+    } finally {
+      setDeletingConfig('');
     }
   };
 
@@ -350,7 +445,12 @@ export default function TabNginx() {
         nginxPath,
       ]);
 
-      cmd.execute();
+      const output = await cmd.execute();
+      if (output.code !== 0) {
+        throw new Error(
+          output.stderr || output.stdout || 'Nginx gagal dijalankan.',
+        );
+      }
       showAlert('Nginx started successfully', 'success');
     } catch (err) {
       showAlert(`${err}`, 'error');
@@ -471,6 +571,7 @@ export default function TabNginx() {
               sx={{ height: 40, mt: 2.5 }}
               color="success"
               onClick={handleStartNginx}
+              disabled={!nginxPath}
               size="small"
             >
               <PlayArrow />
@@ -491,6 +592,7 @@ export default function TabNginx() {
               sx={{ height: 40, mt: 2.5 }}
               color="warning"
               onClick={reloadNginx}
+              disabled={!nginxPath}
               size="small"
             >
               <Refresh />
@@ -542,7 +644,14 @@ export default function TabNginx() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {nginxList.length === 0 ? (
+            {!nginxPath ? (
+              <TableRow>
+                <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                  Path Nginx belum dikonfigurasi. Silakan pilih folder Nginx
+                  terlebih dahulu.
+                </TableCell>
+              </TableRow>
+            ) : nginxList.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
                   Belum ada data.
@@ -576,12 +685,17 @@ export default function TabNginx() {
                     >
                       <Folder />
                     </IconButton>
-                    {/* <IconButton
+                    <IconButton
                       color="error"
                       onClick={() => handleDeleteNginx(site)}
+                      disabled={deployLoading !== '' || deletingConfig !== ''}
                     >
-                      <Delete />
-                    </IconButton> */}
+                      {deletingConfig === site.fileName ? (
+                        <CircularProgress size={20} />
+                      ) : (
+                        <Delete />
+                      )}
+                    </IconButton>
                   </TableCell>
                 </TableRow>
               ))

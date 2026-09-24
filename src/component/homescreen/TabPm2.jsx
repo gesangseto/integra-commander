@@ -184,10 +184,7 @@ export default function TabPm2() {
       cmd.on('error', (error) => settle(reject, new Error(error)));
       cmd.on('close', (data) => {
         if (data.code !== 0) {
-          settle(
-            reject,
-            new Error(stderr || `Command failed (${data.code})`),
-          );
+          settle(reject, new Error(stderr || `Command failed (${data.code})`));
         } else {
           settle(resolve, { code: data.code, stdout, stderr });
         }
@@ -327,11 +324,23 @@ export default function TabPm2() {
    * @returns {Promise<void>}
    */
   const handleReloadEnv = async (item) => {
+    setIsLoading(true);
     try {
-      await updateFileEnv(`${serviceDir}`);
-      await handlePm2Action('restart', item.name);
+      await Command.create('run-command', [
+        '/C',
+        'pm2',
+        'reload',
+        item.name,
+        '--update-env',
+      ]).execute();
+
+      await new Promise((r) => setTimeout(r, 200));
+      fetchPm2List();
+      showAlert(`Update Env successfully`, 'success');
     } catch (error) {
       showAlert(`${error}`, 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -610,6 +619,7 @@ export default function TabPm2() {
       APP_NAME: setting.appName,
       APP_PORT: setting.backendPort,
       APP_TIMEZONE: setting.timezone,
+      APP_MODE: setting.appMode,
 
       LOGIN_TIMEOUT: 15,
       DB_DIALECT: setting.databaseDialect,

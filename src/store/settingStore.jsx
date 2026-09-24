@@ -11,6 +11,7 @@ export const useSettingStore = create(
         rangeTransaction: 'last_1_week',
         serverIp: '',
         timezone: 'Asia/Jakarta',
+        appMode: 'development',
 
         backendPort: '',
         backendBranch: '',
@@ -47,6 +48,7 @@ export const useSettingStore = create(
           rangeTransaction: 'last_1_week',
           serverIp: '',
           timezone: 'Asia/Jakarta',
+          appMode: 'development',
 
           backendPort: '',
           backendBranch: '',
