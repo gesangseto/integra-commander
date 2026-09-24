@@ -23,12 +23,20 @@ export default function Home() {
 
   return (
     <Paper
-      sx={{ minHeight: '100%', width: '100%', p: 3, boxSizing: 'border-box' }}
+      sx={{
+        height: '100%',
+        width: '100%',
+        p: 2,
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
     >
       <Info />
 
-      <Divider sx={{ my: 1 }} />
-      <Typography variant="h5" fontWeight="bold" mb={1}>
+      <Divider sx={{ my: 0.5 }} />
+      <Typography variant="h5" fontWeight="bold" mb={0.5}>
         Server Control Panel
       </Typography>
 
@@ -43,8 +51,10 @@ export default function Home() {
       </Tabs>
 
       {/* Konten sesuai tab yang aktif */}
-      {tabValue === 0 && <TabPm2 />}
-      {tabValue === 1 && <TabNginx />}
+      <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        {tabValue === 0 && <TabPm2 />}
+        {tabValue === 1 && <TabNginx />}
+      </Box>
     </Paper>
   );
 }

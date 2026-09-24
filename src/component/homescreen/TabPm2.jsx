@@ -692,8 +692,16 @@ export default function TabPm2() {
   };
 
   return (
-    <Box mt={2}>
-      <Box display="flex" justifyContent="space-between" mb={2}>
+    <Box
+      mt={1}
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+      }}
+    >
+      <Box display="flex" justifyContent="space-between" mb={1}>
         <Typography variant="h6" fontWeight="bold" color="primary.main">
           PM2 Management
         </Typography>
@@ -744,7 +752,11 @@ export default function TabPm2() {
           </Button>
         </Box>
       </Box>
-      <TableContainer component={Paper} variant="outlined">
+      <TableContainer
+        component={Paper}
+        variant="outlined"
+        sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}
+      >
         <Table>
           <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
             <TableRow>
@@ -874,9 +886,9 @@ export default function TabPm2() {
                 <Paper
                   variant="outlined"
                   sx={{
-                    p: 2,
+                    p: 1.5,
                     borderRadius: 2,
-                    minWidth: 375,
+                    minWidth: 320,
                   }}
                 >
                   <Typography variant="h6" fontWeight="bold">
@@ -911,7 +923,7 @@ export default function TabPm2() {
             ))}
           </Grid>
 
-          <Divider sx={{ my: 3 }} />
+          <Divider sx={{ my: 2 }} />
 
           <Typography variant="subtitle1" fontWeight="bold" mb={1}>
             Deployment Logs
@@ -924,7 +936,7 @@ export default function TabPm2() {
               p: 2,
               bgcolor: '#111',
               color: '#00ff90',
-              height: 250,
+              height: 200,
               overflow: 'auto',
               fontFamily: 'monospace',
               fontSize: 13,

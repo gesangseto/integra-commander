@@ -517,14 +517,22 @@ export default function TabNginx() {
     }
   };
   return (
-    <Box mt={2}>
-      <Box sx={{ mb: 4 }}>
+    <Box
+      mt={1}
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+      }}
+    >
+      <Box sx={{ mb: 2 }}>
         {/* Bagian Atas: Info Lokasi Nginx (Global) */}
         <Paper
           variant="outlined"
           sx={{
-            p: 2,
-            mb: 3,
+            p: 1.5,
+            mb: 2,
             display: 'flex',
             alignItems: 'center',
             gap: 2,
@@ -562,13 +570,13 @@ export default function TabNginx() {
             color="primary"
             onClick={handleBrowseFolder}
             startIcon={<FolderOpen />}
-            sx={{ height: 40, mt: 2.5 }}
+            sx={{ height: 36, mt: 2.5 }}
           >
             Ubah Path
           </Button>
           <Tooltip title="Start Nginx">
             <IconButton
-              sx={{ height: 40, mt: 2.5 }}
+              sx={{ height: 36, mt: 2.5 }}
               color="success"
               onClick={handleStartNginx}
               disabled={!nginxPath}
@@ -579,7 +587,7 @@ export default function TabNginx() {
           </Tooltip>
           <Tooltip title="Stop Nginx">
             <IconButton
-              sx={{ height: 40, mt: 2.5 }}
+              sx={{ height: 36, mt: 2.5 }}
               color="error"
               onClick={handleStopNginx}
               size="small"
@@ -589,7 +597,7 @@ export default function TabNginx() {
           </Tooltip>
           <Tooltip title="Reload Configuration">
             <IconButton
-              sx={{ height: 40, mt: 2.5 }}
+              sx={{ height: 36, mt: 2.5 }}
               color="warning"
               onClick={reloadNginx}
               disabled={!nginxPath}
@@ -621,7 +629,7 @@ export default function TabNginx() {
       <TableContainer
         component={Paper}
         variant="outlined"
-        sx={{ borderRadius: 2 }}
+        sx={{ flex: 1, minHeight: 0, overflow: 'auto', borderRadius: 2 }}
       >
         <Table>
           <TableHead sx={{ backgroundColor: '#f8f9fa' }}>
@@ -718,9 +726,9 @@ export default function TabNginx() {
                 <Paper
                   variant="outlined"
                   sx={{
-                    p: 2,
+                    p: 1.5,
                     borderRadius: 2,
-                    minWidth: 375,
+                    minWidth: 320,
                   }}
                 >
                   <Typography variant="h6" fontWeight="bold">
@@ -755,7 +763,7 @@ export default function TabNginx() {
             ))}
           </Grid>
 
-          <Divider sx={{ my: 3 }} />
+          <Divider sx={{ my: 2 }} />
 
           <Typography variant="subtitle1" fontWeight="bold" mb={1}>
             Deployment Logs
@@ -767,7 +775,7 @@ export default function TabNginx() {
               p: 2,
               bgcolor: '#111',
               color: '#00ff90',
-              height: 250,
+              height: 200,
               overflow: 'auto',
               fontFamily: 'monospace',
               fontSize: 13,

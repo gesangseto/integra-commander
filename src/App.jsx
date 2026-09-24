@@ -1,4 +1,4 @@
-import { Box } from '@mui/material';
+import { Box, ThemeProvider } from '@mui/material';
 import { invoke } from '@tauri-apps/api/core';
 import { Command } from '@tauri-apps/plugin-shell';
 import { useEffect, useState } from 'react';
@@ -11,6 +11,7 @@ import SettingScreen from './screen/SettingScreen';
 import Splash from './screen/Splash';
 import { useAppStore } from './store/pathStore';
 import { showGlobalAlert } from './component/AlertProvider';
+import compactTheme from './theme';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -27,7 +28,7 @@ function App() {
         if (!admin) {
           showGlobalAlert(
             'Aplikasi berjalan tanpa hak Admin. Fitur "Setup Startup" membutuhkan Run as Administrator.',
-            'warning'
+            'warning',
           );
         }
         // =====================================================
@@ -75,8 +76,8 @@ function App() {
       <Box
         sx={{
           display: 'flex',
-          height: '100vh',
-          width: '100vw',
+          height: '98vh',
+          width: '99vw',
           overflow: 'hidden',
           backgroundColor: '#f8fafc',
         }}
@@ -91,7 +92,7 @@ function App() {
             flexDirection: 'column',
             flex: 1,
             minWidth: 0,
-            height: '100vh',
+            height: '98vh',
             overflow: 'hidden',
           }}
         >
@@ -103,16 +104,15 @@ function App() {
             sx={{
               flex: 1,
               minHeight: 0,
-              overflowY: 'auto',
-              overflowX: 'hidden',
-              px: 1,
-              py: 1,
+              overflow: 'hidden',
             }}
           >
-            <Routes>
-              <Route path="/" element={<HomeScreen user={user} />} />
-              <Route path="/setting" element={<SettingScreen />} />
-            </Routes>
+            <ThemeProvider theme={compactTheme}>
+              <Routes>
+                <Route path="/" element={<HomeScreen user={user} />} />
+                <Route path="/setting" element={<SettingScreen />} />
+              </Routes>
+            </ThemeProvider>
           </Box>
 
           <Box sx={{ flexShrink: 0 }}>

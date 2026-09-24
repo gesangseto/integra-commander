@@ -103,12 +103,12 @@ export default function Info() {
       sx={{
         backgroundColor: '#313131',
         color: '#fff',
-        px: 4,
-        py: 2,
+        px: 3,
+        py: 1.5,
         borderRadius: 3,
       }}
     >
-      <Grid container spacing={3}>
+      <Grid container spacing={2}>
         {/* ===================================================== */}
         {/* SYSTEM RESOURCE */}
         {/* ===================================================== */}
@@ -187,8 +187,8 @@ export default function Info() {
       {/* FOOTER INFO */}
       {/* ===================================================== */}
       <Box
-        mt={1}
-        pt={1}
+        mt={0.5}
+        pt={0.5}
         display="flex"
         justifyContent="space-between"
         borderTop="1px solid rgba(255,255,255,0.08)"
@@ -220,7 +220,7 @@ const ResourceItemPercent = ({ label, value = 0, color }) => {
   const percent = Number(value) || 0;
 
   return (
-    <Box mb={1.5}>
+    <Box mb={1}>
       <Box display="flex" justifyContent="space-between" mb={0.5}>
         <Typography variant="body2">{label}</Typography>
 
@@ -238,7 +238,7 @@ const ResourceItemPercent = ({ label, value = 0, color }) => {
         variant="determinate"
         value={Math.min(percent, 100)}
         sx={{
-          height: 10,
+          height: 6,
           borderRadius: 5,
           bgcolor: 'rgba(255,255,255,0.08)',
           '& .MuiLinearProgress-bar': {
@@ -259,7 +259,7 @@ const ResourceItemMemory = ({ label, value = 0, totalMB = 0, color }) => {
   const percent = totalMB > 0 ? (usedMB / totalMB) * 100 : 0;
 
   return (
-    <Box mb={1.5}>
+    <Box mb={1}>
       <Box display="flex" justifyContent="space-between" mb={0.5}>
         <Typography variant="body2">{label}</Typography>
 
@@ -278,7 +278,7 @@ const ResourceItemMemory = ({ label, value = 0, totalMB = 0, color }) => {
         variant="determinate"
         value={Math.min(percent, 100)}
         sx={{
-          height: 10,
+          height: 6,
           borderRadius: 5,
           bgcolor: 'rgba(255,255,255,0.08)',
           '& .MuiLinearProgress-bar': {

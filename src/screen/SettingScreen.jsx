@@ -233,10 +233,12 @@ function SettingScreen() {
   return (
     <Paper
       sx={{
-        minHeight: '100%',
+        height: '100%',
         width: '100%',
-        px: 3,
+        px: 2.5,
         boxSizing: 'border-box',
+        overflowY: 'auto',
+        overflowX: 'hidden',
       }}
     >
       <DialogGitAuthentication
@@ -260,12 +262,12 @@ function SettingScreen() {
       {/* ========================================================= */}
       {/* ================= APPLICATION =========================== */}
       {/* ========================================================= */}
-      <Box mt={3}>
-        <Typography variant="h6" fontWeight="bold" mb={2}>
+      <Box mt={2}>
+        <Typography variant="h6" fontWeight="bold" mb={1.5}>
           Application
         </Typography>
         <Box>
-          <Grid container spacing={2}>
+          <Grid container spacing={1.5}>
             <Grid size={4}>
               <TextField
                 size="small"
@@ -386,14 +388,14 @@ function SettingScreen() {
       {/* ========================================================= */}
       {/* ================= DATABASE SETUP =========================== */}
       {/* ========================================================= */}
-      <Divider sx={{ mt: 3 }} />
-      <Box mt={2}>
-        <Typography variant="h6" fontWeight="bold" mb={2}>
+      <Divider sx={{ mt: 2 }} />
+      <Box mt={1.5}>
+        <Typography variant="h6" fontWeight="bold" mb={1.5}>
           Database Setup
         </Typography>
 
         <Box sx={{ flexGrow: 1 }}>
-          <Grid container spacing={2}>
+          <Grid container spacing={1.5}>
             <Grid size={6}>
               <TextField
                 size="small"
@@ -454,14 +456,14 @@ function SettingScreen() {
       {/* ========================================================= */}
       {/* ================= BACKEND =============================== */}
       {/* ========================================================= */}
-      <Divider sx={{ mt: 3 }} />
-      <Box mt={2}>
-        <Typography variant="h6" fontWeight="bold" mb={2}>
+      <Divider sx={{ mt: 2 }} />
+      <Box mt={1.5}>
+        <Typography variant="h6" fontWeight="bold" mb={1.5}>
           Network Settings
         </Typography>
 
         <Box sx={{ flexGrow: 1 }}>
-          <Grid container spacing={2}>
+          <Grid container spacing={1.5}>
             <Grid size={2}>
               <TextField
                 size="small"
@@ -520,21 +522,21 @@ function SettingScreen() {
       {/* ========================================================= */}
       {/* ================= CONNECTOR / BPOM CONFIG ============== */}
       {/* ========================================================= */}
-      <Divider sx={{ mt: 3 }} />
-      <Box mt={2}>
-        <Typography variant="h6" fontWeight="bold" mb={2}>
+      <Divider sx={{ mt: 2 }} />
+      <Box mt={1.5}>
+        <Typography variant="h6" fontWeight="bold" mb={1.5}>
           Connector
         </Typography>
 
         {/* ========================================================= */}
         {/* ================= BPOM CONFIG =========================== */}
         {/* ========================================================= */}
-        <Box mt={3}>
-        <Typography variant="h6" fontWeight="bold" mb={2}>
+        <Box mt={2}>
+        <Typography variant="h6" fontWeight="bold" mb={1.5}>
           BPOM Config
         </Typography>
         <Box>
-          <Grid container spacing={2}>
+          <Grid container spacing={1.5}>
             <Grid size={4}>
               <TextField
                 size="small"
@@ -610,7 +612,7 @@ function SettingScreen() {
       {/* ========================================================= */}
       {/* ================= ACTION ================================ */}
       {/* ========================================================= */}
-      <Box mt={5} display="flex" justifyContent="flex-end" gap={2}>
+      <Box mt={3} display="flex" justifyContent="flex-end" gap={1.5}>
         {/* <Button variant="outlined" onClick={handleReset}>
           Reset
         </Button> */}
