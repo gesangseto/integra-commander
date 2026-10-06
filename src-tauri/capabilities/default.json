@@ -43,6 +43,7 @@
     "fs:allow-mkdir",
     "fs:allow-read-dir",
     "fs:allow-remove",
+    "fs:allow-rename",
     {
       "identifier": "fs:scope",
       "allow": ["**/*"]

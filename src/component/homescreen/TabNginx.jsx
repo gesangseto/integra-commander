@@ -40,6 +40,7 @@ import {
   readDir,
   readTextFile,
   remove,
+  rename,
   writeTextFile,
 } from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
@@ -79,7 +80,11 @@ export default function TabNginx() {
 
   const [nginxList, setNginxList] = useState([]);
 
-  const tempDir = `${setting.workingDirectory}\\temp`;
+  // Clone/build ditahan di folder staging dulu, baru di-swap ke public,
+  // supaya build yang gagal tidak pernah menyentuh folder nginx.
+  const stagingDir = `${setting.workingDirectory}\\staging`;
+  const frontendDir = `${stagingDir}\\frontend`; // lokasi clone repo + build
+  const stagedOutputDir = `${stagingDir}\\public`; // hasil `outputDir: ../public`
   const serviceDir = `${setting.workingDirectory}\\public`;
   useEffect(() => {
     if (nginxPath) {
@@ -217,6 +222,42 @@ export default function TabNginx() {
     openLocation(item?.rootPath, (err) => showAlert(err, 'error'));
   };
 
+  // Tukar folder hasil build ke public directory dengan rename (sangat
+  // cepat, nyaris tanpa downtime). Public lama diparkir dulu sebagai backup
+  // agar bisa di-rollback bila rename kedua gagal.
+  const swapToPublic = async (sourceDir) => {
+    const backupDir = `${stagingDir}\\previous-public`;
+    if (await exists(backupDir)) {
+      await remove(backupDir, { recursive: true });
+    }
+
+    const hadPrevious = await exists(serviceDir);
+    if (hadPrevious) {
+      await rename(serviceDir, backupDir);
+    }
+
+    try {
+      await rename(sourceDir, serviceDir);
+    } catch (err) {
+      if (hadPrevious) {
+        try {
+          await rename(backupDir, serviceDir);
+        } catch (rollbackErr) {
+          throw new Error(
+            `Gagal memindahkan hasil build ke public directory (${err}). Rollback juga gagal (${rollbackErr}), folder public mungkin kosong.`,
+          );
+        }
+      }
+      throw new Error(
+        `Gagal memindahkan hasil build ke public directory: ${err}`,
+      );
+    }
+
+    if (hadPrevious) {
+      await remove(backupDir, { recursive: true }).catch(() => {});
+    }
+  };
+
   const handleDeploy = async (type) => {
     if (!nginxPath || !setting.workingDirectory || !setting.frontendPort) {
       showAlert(
@@ -232,7 +273,10 @@ export default function TabNginx() {
       frontendPort < 1 ||
       frontendPort > 65535
     ) {
-      showAlert('Frontend port harus berupa angka antara 1 dan 65535.', 'error');
+      showAlert(
+        'Frontend port harus berupa angka antara 1 dan 65535.',
+        'error',
+      );
       return;
     }
 
@@ -240,11 +284,25 @@ export default function TabNginx() {
     setDeployLogs([]);
 
     try {
-      // Hapus folder temp
+      // Self-heal: bila swap sebelumnya terputus di tengah jalan, backup
+      // public masih ada di staging dan folder public kosong → kembalikan
+      // dulu sebelum staging dibersihkan.
+      const orphanBackup = `${stagingDir}\\previous-public`;
+      if ((await exists(orphanBackup)) && !(await exists(serviceDir))) {
+        appendLog('Restoring previous public directory from backup...');
+        await rename(orphanBackup, serviceDir);
+      }
+      // Bersihkan sisa staging dari run sebelumnya, plus folder 'temp' lama
+      // yang dipakai versi sebelumnya
       await runCommand(
-        ['/C', 'rmdir', '/S', '/Q', tempDir],
+        ['/C', 'rmdir', '/S', '/Q', stagingDir],
         setting.workingDirectory,
       ).catch(() => {});
+      await runCommand(
+        ['/C', 'rmdir', '/S', '/Q', `${setting.workingDirectory}\\temp`],
+        setting.workingDirectory,
+      ).catch(() => {});
+      await mkdir(stagingDir, { recursive: true });
       // =====================================================
       // START DEPLOYMENT
       // =====================================================
@@ -257,11 +315,11 @@ export default function TabNginx() {
       if (setting.frontendBranch) {
         cloneResult = await gitCloneFe({
           ...gitForm,
-          directory: tempDir,
+          directory: frontendDir,
           branch: setting.frontendBranch,
         });
       } else {
-        cloneResult = await gitCloneFe({ ...gitForm, directory: tempDir });
+        cloneResult = await gitCloneFe({ ...gitForm, directory: frontendDir });
       }
       if (cloneResult.error) {
         throw new Error(cloneResult.message);
@@ -276,7 +334,7 @@ export default function TabNginx() {
       };
       appendLog('Updating .env file...');
       // Path file .env
-      const envPath = `${tempDir}\\.env`;
+      const envPath = `${frontendDir}\\.env`;
       // Isi env existing
       let currentEnv = '';
       try {
@@ -296,35 +354,65 @@ export default function TabNginx() {
       // INSTALL DEPENDENCIES
       // =====================================================
       appendLog('Installing dependencies...');
-      await runCommand(['/C', 'npm', 'install'], tempDir);
+      const installResult = await runCommand(
+        ['/C', 'npm', 'install'],
+        frontendDir,
+      );
+      if (installResult.code !== 0) {
+        throw new Error(
+          installResult.stderr || installResult.stdout || 'npm install failed.',
+        );
+      }
       // =====================================================
       // BUILD PROJECT
       // =====================================================
       appendLog('Building application...');
-      // npm run build
-      await runCommand(['/C', 'npm', 'run', 'build'], tempDir);
-      // =====================================================
-      // COPY BUILD OUTPUT TO NGINX PUBLIC DIRECTORY
-      // =====================================================
-      appendLog('Copying build output to public directory...');
-      await runCommand(
-        ['/C', 'xcopy', `${tempDir}\\dist`, serviceDir, '/E', '/I', '/Y'],
-        setting.workingDirectory,
+      const buildResult = await runCommand(
+        ['/C', 'npm', 'run', 'build'],
+        frontendDir,
       );
+      if (buildResult.code !== 0) {
+        throw new Error(
+          buildResult.stderr || buildResult.stdout || 'Build failed.',
+        );
+      }
+      // =====================================================
+      // VERIFIKASI + SWAP ATOMIK KE PUBLIC
+      // =====================================================
+      // Repo frontend memakai `outputDir: ../public`, jadi hasil build ada
+      // di staging\public; bila repo memakai outputDir default (dist),
+      // hasilnya ada di <clone>\dist. Public lama baru diganti SETELAH
+      // build sukses, sehingga build gagal tidak mengganggu site.
+      let buildOutputDir = '';
+      if (await exists(`${stagedOutputDir}\\index.html`)) {
+        buildOutputDir = stagedOutputDir;
+      } else if (await exists(`${frontendDir}\\dist\\index.html`)) {
+        buildOutputDir = `${frontendDir}\\dist`;
+      } else {
+        throw new Error(
+          'Build finished, but no index.html was found in the staging directory.',
+        );
+      }
+      appendLog('Swapping build output to public directory...');
+      await swapToPublic(buildOutputDir);
+      if (!(await exists(`${serviceDir}\\index.html`))) {
+        throw new Error(
+          'Swap finished, but no index.html was found in the public directory.',
+        );
+      }
       // =====================================================
       // UPDATE NGINX ACTIVE SITES
       // =====================================================
       const configSaved = await handleSaveNginx();
       if (!configSaved) throw new Error('Gagal menyimpan konfigurasi Nginx.');
       // =====================================================
-      // HAPUS TEMP DIRECTORY
+      // HAPUS STAGING DIRECTORY
       // =====================================================
-      appendLog('Cleaning temp directory...');
-      // Hapus folder temp
+      appendLog('Cleaning staging directory...');
       await runCommand(
-        ['/C', 'rmdir', '/S', '/Q', tempDir],
+        ['/C', 'rmdir', '/S', '/Q', stagingDir],
         setting.workingDirectory,
-      );
+      ).catch(() => appendLog('Warning: failed to remove staging directory.'));
       showAlert('Deployment success', 'success');
     } catch (err) {
       showAlert(`${err}`, 'error');
@@ -365,7 +453,9 @@ export default function TabNginx() {
 
       await fetchNginxList();
       if (!(await reloadNginx({ notifySuccess: false, notifyError: false }))) {
-        throw new Error('Konfigurasi Nginx tidak disimpan karena validasi gagal.');
+        throw new Error(
+          'Konfigurasi Nginx tidak disimpan karena validasi gagal.',
+        );
       }
       showAlert('Configuration has been saved successfully!.', 'success');
       return true;
