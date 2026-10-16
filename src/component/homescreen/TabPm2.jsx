@@ -325,6 +325,7 @@ export default function TabPm2() {
    */
   const handleReloadEnv = async (item) => {
     setIsLoading(true);
+    await updateFileEnv(serviceDir);
     try {
       await Command.create('run-command', [
         '/C',
