@@ -23,14 +23,16 @@ export default function Home() {
 
   return (
     <Paper
+      elevation={0}
       sx={{
         height: '100%',
         width: '100%',
-        p: 2,
+        p: 0,
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        backgroundColor: 'transparent',
       }}
     >
       <Info />

@@ -41,6 +41,11 @@ export default function BaseDialog({
       color: color.danger,
       icon: <ErrorOutlineIcon fontSize="large" />,
     },
+    // Alias: beberapa pemanggil memakai severity 'danger' (mis. confirm hapus).
+    danger: {
+      color: color.danger,
+      icon: <ErrorOutlineIcon fontSize="large" />,
+    },
   };
 
   const config = severity ? severityConfig[severity] : null;
@@ -56,14 +61,14 @@ export default function BaseDialog({
         sx={{
           m: 0,
           p: 2,
-          bgcolor: color.primary,
+          bgcolor: config ? config.color : color.primary,
           color: 'white',
           display: 'flex',
           alignItems: 'center',
           gap: 1,
         }}
       >
-        <InfoIcon fontSize="large" />
+        {config ? config.icon : <InfoIcon fontSize="large" />}
         <Typography variant="h6" sx={{ color: 'white' }}>
           {title}
         </Typography>

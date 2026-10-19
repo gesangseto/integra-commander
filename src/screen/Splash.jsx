@@ -16,6 +16,7 @@ export default function Splash() {
 
   return (
     <Paper
+      elevation={0}
       sx={{
         width: '100vw',
         height: '100vh',
@@ -23,10 +24,9 @@ export default function Splash() {
         flexDirection: 'column',
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#1a1a24', // Latar belakang gelap estetik
-        color: '#ffffff',
+        background: 'linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%)',
+        borderRadius: 0,
         boxSizing: 'border-box',
-        borderRadius: 0, // Datar agar menyatu dengan borderless window
       }}
     >
       <Box sx={{ position: 'relative', display: 'inline-flex', mb: 3 }}>
@@ -37,21 +37,27 @@ export default function Splash() {
             width: '100%',
             height: '100%',
             borderRadius: '50%',
-            boxShadow: '0 0 30px 5px rgba(0, 210, 255, 0.4)',
+            boxShadow: '0 0 30px 5px rgba(37, 99, 235, 0.25)',
           }}
         />
-        <CircularProgress size={60} thickness={4} sx={{ color: '#00d2ff' }} />
+        <CircularProgress size={60} thickness={4} sx={{ color: '#2563eb' }} />
       </Box>
 
-      <Typography variant="h6" fontWeight="bold" letterSpacing={1} gutterBottom>
+      <Typography
+        variant="h6"
+        fontWeight="bold"
+        letterSpacing={1}
+        gutterBottom
+        sx={{ color: '#0f172a' }}
+      >
         Integra Commander
       </Typography>
 
-      <Typography variant="body2" sx={{ color: '#8a8a9e' }}>
+      <Typography variant="body2" sx={{ color: '#64748b' }}>
         {status}
       </Typography>
 
-      <Typography variant="caption" sx={{ color: '#52526b', mt: 3 }}>
+      <Typography variant="caption" sx={{ color: '#94a3b8', mt: 3 }}>
         V1
       </Typography>
     </Paper>

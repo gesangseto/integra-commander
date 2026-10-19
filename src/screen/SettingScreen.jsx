@@ -232,13 +232,17 @@ function SettingScreen() {
 
   return (
     <Paper
+      elevation={0}
       sx={{
         height: '100%',
         width: '100%',
-        px: 2.5,
+        p: 2.5,
         boxSizing: 'border-box',
         overflowY: 'auto',
         overflowX: 'hidden',
+        backgroundColor: '#ffffff',
+        border: '1px solid #e5e7eb',
+        borderRadius: 3,
       }}
     >
       <DialogGitAuthentication
@@ -515,7 +519,7 @@ function SettingScreen() {
           </Grid>
         </Box>
         <Grid container spacing={3}>
-          <Grid item xs={12} md={6}></Grid>
+          <Grid size={{ xs: 12, md: 6 }}></Grid>
         </Grid>
       </Box>
 

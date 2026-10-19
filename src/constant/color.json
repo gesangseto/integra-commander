@@ -1,14 +1,14 @@
 {
-  "primary": "#0d1fa6",
-  "secondary": "#8a8a8a",
-  "success": "#4dc000",
-  "warning": "#fcb500",
-  "danger": "#ed6e13",
+  "primary": "#2563eb",
+  "secondary": "#64748b",
+  "success": "#16a34a",
+  "warning": "#f59e0b",
+  "danger": "#dc2626",
   "textLight": "#ffffff",
-  "textDark": "#000000",
-  "inherit": "#c7c7c7",
-  "blue": "#0300cc",
-  "blueLight": "#28bbfa",
-  "green": "#009c24",
-  "greenLight": "#08c935"
+  "textDark": "#0f172a",
+  "inherit": "#94a3b8",
+  "blue": "#1d4ed8",
+  "blueLight": "#3b82f6",
+  "green": "#16a34a",
+  "greenLight": "#22c55e"
 }

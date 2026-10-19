@@ -96,15 +96,15 @@ export default function Info() {
     const interval = setInterval(loadStatus, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [setting.databaseDialect]);
 
   return (
     <Box
       sx={{
-        backgroundColor: '#313131',
-        color: '#fff',
-        px: 3,
-        py: 1.5,
+        backgroundColor: '#ffffff',
+        border: '1px solid #e5e7eb',
+        px: 2.5,
+        py: 2,
         borderRadius: 3,
       }}
     >
@@ -191,12 +191,12 @@ export default function Info() {
         pt={0.5}
         display="flex"
         justifyContent="space-between"
-        borderTop="1px solid rgba(255,255,255,0.08)"
+        borderTop="1px solid #e5e7eb"
       >
-        <Typography variant="caption" color="gray">
+        <Typography variant="caption" sx={{ color: '#64748b' }}>
           Total RAM : {(data.totalMemoryMB / 1024).toFixed(1)} GB
         </Typography>
-        <Typography variant="caption" color="gray">
+        <Typography variant="caption" sx={{ color: '#64748b' }}>
           Mertrack Total Usage RAM :
           {(data.totalMemoryMB > 0
             ? (totalMertrackMemory / data.totalMemoryMB) * 100
@@ -240,7 +240,7 @@ const ResourceItemPercent = ({ label, value = 0, color }) => {
         sx={{
           height: 6,
           borderRadius: 5,
-          bgcolor: 'rgba(255,255,255,0.08)',
+          bgcolor: '#f1f5f9',
           '& .MuiLinearProgress-bar': {
             bgcolor: color,
           },
@@ -280,7 +280,7 @@ const ResourceItemMemory = ({ label, value = 0, totalMB = 0, color }) => {
         sx={{
           height: 6,
           borderRadius: 5,
-          bgcolor: 'rgba(255,255,255,0.08)',
+          bgcolor: '#f1f5f9',
           '& .MuiLinearProgress-bar': {
             bgcolor: color,
           },

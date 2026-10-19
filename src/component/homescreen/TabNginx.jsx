@@ -88,9 +88,10 @@ export default function TabNginx() {
   const serviceDir = `${setting.workingDirectory}\\public`;
   useEffect(() => {
     if (nginxPath) {
-      setNGINX_CONF_DIR(`${nginxPath}\\conf\\sites-enabled`);
+      const confDir = `${nginxPath}\\conf\\sites-enabled`;
+      setNGINX_CONF_DIR(confDir);
       initializeNginxConfig(nginxPath);
-      fetchNginxList();
+      fetchNginxList(confDir);
     }
   }, [nginxPath]);
 
@@ -121,16 +122,16 @@ export default function TabNginx() {
     return `${content.trim()}\n${key}="${value}"\n`;
   };
 
-  const fetchNginxList = async () => {
+  const fetchNginxList = async (confDir = NGINX_CONF_DIR) => {
     try {
       // 1. Baca daftar file di folder sites-enabled
-      const entries = await readDir(NGINX_CONF_DIR);
+      const entries = await readDir(confDir);
       const tempList = [];
 
       for (const entry of entries) {
         // Hanya proses file yang berakhiran .conf
         if (entry.isFile && entry.name.endsWith('.conf')) {
-          const filePath = `${NGINX_CONF_DIR}\\${entry.name}`;
+          const filePath = `${confDir}\\${entry.name}`;
           const content = await readTextFile(filePath);
 
           // 2. Ekstrak data menggunakan REGEX
@@ -812,7 +813,7 @@ export default function TabNginx() {
         <DialogContent>
           <Grid container spacing={2}>
             {DEPLOY_APPS.map((app) => (
-              <Grid item xs={12} md={6} key={app.key}>
+              <Grid size={{ xs: 12, md: 6 }} key={app.key}>
                 <Paper
                   variant="outlined"
                   sx={{

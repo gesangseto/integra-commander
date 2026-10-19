@@ -6,44 +6,42 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { darken, lighten } from '@mui/material/styles';
 import { invoke } from '@tauri-apps/api/core';
 import { useEffect, useState } from 'react';
-import WindowOutlinedIcon from '@mui/icons-material/WindowOutlined';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useNavigate } from 'react-router-dom';
 import { useConfirm } from '../ConfirmProvider';
 import { DashboardOutlined } from '@mui/icons-material';
-import color from '../../constant/color.json';
 
 let menu = [
   { id: 0, name: 'Dashboard', route: '/' },
   { id: 1, name: 'Setting', route: '/setting' },
 ];
 
+// Gaya tombol navigasi sidebar (persegi membulat, aksen biru saat aktif).
+const navButtonSx = (active) => ({
+  minWidth: 0,
+  width: 52,
+  height: 52,
+  borderRadius: '14px',
+  color: active ? '#2563eb' : '#64748b',
+  backgroundColor: active ? '#dbeafe' : 'transparent',
+  border: '1px solid',
+  borderColor: active ? '#bfdbfe' : 'transparent',
+  transition: 'all .18s ease',
+  '&:hover': {
+    backgroundColor: active ? '#dbeafe' : '#f1f5f9',
+    color: active ? '#1d4ed8' : '#0f172a',
+  },
+});
+
 export default function SideBar() {
   const navigate = useNavigate();
   const { confirm: showConfirm } = useConfirm();
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
-  const defaultColor = '#226aa5';
   const [activeMenu, setActiveMenu] = useState(0);
-
-  const sxButton = (props = {}) => {
-    const { disabled } = props;
-    return {
-      borderRadius: 3,
-      display: 'flex',
-      flexDirection: 'column',
-      backgroundColor: disabled ? lighten(defaultColor, 0.5) : defaultColor,
-      border: disabled ? null : 2,
-      color: 'white',
-      '&:hover': {
-        backgroundColor: disabled ? null : darken(defaultColor, 0.5),
-      },
-    };
-  };
 
   useEffect(() => {
     formatDate();
@@ -78,53 +76,63 @@ export default function SideBar() {
   return (
     <Box
       sx={{
-        width: 100,
-        height: '95vh',
-        bgcolor: '#070069',
-        color: 'white',
-        p: 2,
+        width: 96,
+        height: '99vh',
+        bgcolor: '#ffffff',
+        borderRight: '1px solid #e5e7eb',
+        p: 1.5,
         display: 'flex',
         flexDirection: 'column',
-        gap: 2,
+        alignItems: 'center',
+        gap: 1.5,
+        boxSizing: 'border-box',
       }}
     >
       {/* TIME */}
-      <Box textAlign="center">
-        <Typography variant="h5" fontWeight="bold">
+      <Box textAlign="center" sx={{ width: '100%' }}>
+        <Typography
+          variant="subtitle1"
+          fontWeight={800}
+          sx={{ color: '#0f172a', letterSpacing: 0.5 }}
+        >
           {time}
         </Typography>
-        <Typography variant="body2">{date}</Typography>
+        <Typography variant="caption" sx={{ color: '#64748b' }}>
+          {date}
+        </Typography>
       </Box>
 
-      <Divider sx={{ bgcolor: '#555' }} />
+      <Divider sx={{ width: '100%' }} />
 
       {/* BUTTON GROUP */}
-      <Stack spacing={1}>
+      <Stack spacing={1} alignItems="center">
         <Tooltip title="Dashboard">
           <Button
-            sx={sxButton({ disabled: activeMenu === 0 ? true : false })}
+            sx={navButtonSx(activeMenu === 0)}
             onClick={() => handleClickMenu(0)}
           >
-            <DashboardOutlined fontSize="large" />
+            <DashboardOutlined fontSize="medium" />
           </Button>
         </Tooltip>
       </Stack>
 
-      <Divider sx={{ bgcolor: '#555' }} />
-
-      <Stack spacing={1} mt="auto">
+      <Stack spacing={1} mt="auto" alignItems="center">
         <Tooltip title="Settings">
           <Button
             aria-label="Settings"
-            sx={sxButton({ disabled: activeMenu === 1 ? true : false })}
+            sx={navButtonSx(activeMenu === 1)}
             onClick={() => handleClickMenu(1)}
           >
-            <SettingsIcon fontSize="large" />
+            <SettingsIcon fontSize="medium" />
           </Button>
         </Tooltip>
         <Tooltip title="Shutdown">
           <Button
-            sx={{ ...sxButton(), backgroundColor: 'red' }}
+            sx={{
+              ...navButtonSx(false),
+              color: '#dc2626',
+              '&:hover': { backgroundColor: '#fee2e2', color: '#b91c1c' },
+            }}
             onClick={async () => {
               const ok = await showConfirm({
                 title: 'Shotdown',
@@ -134,7 +142,7 @@ export default function SideBar() {
               if (ok) await invoke('shutdown');
             }}
           >
-            <PowerSettingsNewIcon />
+            <PowerSettingsNewIcon fontSize="medium" />
           </Button>
         </Tooltip>
       </Stack>

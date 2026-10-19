@@ -10,6 +10,7 @@ import HomeScreen from './screen/HomeScreen';
 import SettingScreen from './screen/SettingScreen';
 import Splash from './screen/Splash';
 import { useAppStore } from './store/pathStore';
+import { useAppStatusStore } from './store/appStatusStore';
 import { showGlobalAlert } from './component/AlertProvider';
 import compactTheme from './theme';
 
@@ -17,6 +18,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
   const { nginxPath, setNginxPath } = useAppStore();
+  const setIsAdmin = useAppStatusStore((s) => s.setIsAdmin);
 
   useEffect(() => {
     const initApp = async () => {
@@ -25,20 +27,22 @@ function App() {
         // CEK ADMIN PRIVILEGES
         // =====================================================
         const admin = await invoke('is_admin');
+        setIsAdmin(admin);
         if (!admin) {
           showGlobalAlert(
-            'Aplikasi berjalan tanpa hak Admin. Fitur "Setup Startup" membutuhkan Run as Administrator.',
+            'Aplikasi berjalan tanpa hak Administrator. Fitur PM2 dan "Setup Startup" membutuhkan Run as Administrator.',
             'warning',
           );
+        } else {
+          // =====================================================
+          // PM2 RESURRECT (hanya saat berjalan sebagai Administrator)
+          // =====================================================
+          await Command.create('run-command', [
+            '/C',
+            'pm2',
+            'resurrect',
+          ]).execute();
         }
-        // =====================================================
-        // PM2 RESURRECT
-        // =====================================================
-        await Command.create('run-command', [
-          '/C',
-          'pm2',
-          'resurrect',
-        ]).execute();
         // =====================================================
         // START NGINX JIKA PATH ADA
         // =====================================================
@@ -79,10 +83,10 @@ function App() {
           height: '98vh',
           width: '99vw',
           overflow: 'hidden',
-          backgroundColor: '#f8fafc',
+          backgroundColor: '#f5f7fb',
         }}
       >
-        <Box sx={{ flexShrink: 0, height: '100vh', overflow: 'hidden' }}>
+        <Box sx={{ flexShrink: 0, height: '100vh' }}>
           <SideBar />
         </Box>
 
@@ -94,6 +98,9 @@ function App() {
             minWidth: 0,
             height: '98vh',
             overflow: 'hidden',
+            p: 1.5,
+            gap: 1.5,
+            boxSizing: 'border-box',
           }}
         >
           <Box sx={{ flexShrink: 0, zIndex: 2 }}>

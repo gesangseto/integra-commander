@@ -65,7 +65,7 @@ export const useSettingStore = create(
           bpomAppName: '',
           bpomEmail: '',
           bpomPassword: '',
-          bpomUrl: '',
+          bpomUrl: 'https://ttacdev.pom.go.id/dev/public/api/v3/',
         };
         set({ form: defaultForm });
       },

@@ -1,12 +1,12 @@
 import {
   Article,
-  CleaningServices,
+  Autorenew,
   Delete,
+  DeleteForever,
   Refresh,
   RocketLaunch,
   Stop,
 } from '@mui/icons-material';
-import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import {
   Backdrop,
   Box,
@@ -36,6 +36,7 @@ import { useEffect, useRef, useState } from 'react';
 import Pm2LogViewer from '../Pm2LogViewer';
 
 import { useSettingStore } from '../../store/settingStore';
+import { useAppStatusStore } from '../../store/appStatusStore';
 import { humanizeText, openLocation } from '../../utility';
 import { gitClone, gitValidation } from '../../utility/gitUtility';
 import { useAlert } from '../AlertProvider';
@@ -78,7 +79,8 @@ const DEPLOY_APPS = [
  *
  * Menyediakan:
  * - Tabel daftar proses PM2 (auto-refresh tiap 10 detik)
- * - Aksi per proses: monitor log, update .env, stop, restart, delete
+ * - Aksi per proses: monitor log, stop, restart, delete
+ * - Tombol "Reload .env": perbarui file .env lalu reload semua proses PM2
  * - Dialog deployment untuk API_CORE, API_BPOM, dan logrotate
  * - Dialog autentikasi Git sebelum clone repository
  *
@@ -104,10 +106,16 @@ export default function TabPm2() {
   const [gitForm, setGitForm] = useState({ username: '', password: '' });
 
   const setting = useSettingStore((state) => state.form);
+  const isAdmin = useAppStatusStore((state) => state.isAdmin);
+  const setIsAdmin = useAppStatusStore((state) => state.setIsAdmin);
 
   const [pm2List, setPm2List] = useState([]);
 
   const [openDeployDialog, setOpenDeployDialog] = useState(false);
+  const [openReloadDialog, setOpenReloadDialog] = useState(false);
+  const [isReloading, setIsReloading] = useState(false);
+  const [pendingReload, setPendingReload] = useState(false);
+  const [reloadMode, setReloadMode] = useState('soft');
 
   const [openLogViewer, setOpenLogViewer] = useState(false);
   const [selectedProcess, setSelectedProcess] = useState(null);
@@ -126,10 +134,15 @@ export default function TabPm2() {
   const serviceDir = `${setting.workingDirectory}\\services`;
 
   useEffect(() => {
+    // Bila aplikasi TIDAK berjalan sebagai Administrator, PM2 tidak bisa
+    // diakses (connect EPERM \\.\pipe\rpc.sock). Hentikan polling agar tidak
+    // terjadi looping pemanggilan PM2 yang gagal.
+    if (isAdmin === false) return undefined;
+
     fetchPm2List();
     const interval = setInterval(fetchPm2List, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isAdmin]);
 
   /**
    * Menambahkan pesan log ke state `deployLogs` dengan timestamp lokal.
@@ -225,6 +238,13 @@ export default function TabPm2() {
         setPm2List(enrichedData);
       }
     } catch (error) {
+      const message = String(error);
+      // PM2 tidak dapat diakses tanpa hak Administrator → tandai non-admin
+      // agar polling dihentikan dan warning tampil di header.
+      if (message.includes('EPERM') || message.includes('rpc.sock')) {
+        setIsAdmin(false);
+        return;
+      }
       showAlert(`${error}`, 'error');
     }
   };
@@ -252,32 +272,6 @@ export default function TabPm2() {
       await syncPm2Session();
       fetchPm2List();
       showAlert('PM2 session saved successfully', 'success');
-    } catch (error) {
-      showAlert(`${error}`, 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  /**
-   * Membersihkan cache npm (`npm cache clean --force`) dengan konfirmasi
-   * terlebih dahulu, lalu menampilkan notifikasi hasilnya.
-   * @returns {Promise<void>}
-   */
-  const handleClearNpmCache = async () => {
-    const ok = await showConfirm({
-      title: 'Clear NPM Cache',
-      message: 'Apakah anda yakin ingin membersihkan cache npm?',
-      severity: 'danger',
-    });
-    if (!ok) return;
-    setIsLoading(true);
-    try {
-      await runCommand(
-        ['/C', 'npm', 'cache', 'clean', '--force'],
-        setting.workingDirectory,
-      );
-      showAlert('NPM cache cleared successfully', 'success');
     } catch (error) {
       showAlert(`${error}`, 'error');
     } finally {
@@ -317,31 +311,144 @@ export default function TabPm2() {
   };
 
   /**
-   * Memperbarui file `.env` pada folder services proses PM2,
-   * lalu me-restart proses tersebut agar konfigurasi baru diterapkan.
+   * Menjalankan ulang (start) sebuah proses PM2 memakai konfigurasi aslinya:
+   * interpreter, interpreter-args (alias node-args), working directory, serta
+   * mode cluster & jumlah instance bila ada. Dipakai oleh Force Reload setelah
+   * `pm2 delete`.
    *
-   * @param {Object} item - Objek proses PM2 (dari `pm2List`), memakai `item.name`.
+   * @param {Object} proc - Objek proses PM2 hasil `pm2 jlist` (yang di-enrich).
    * @returns {Promise<void>}
    */
-  const handleReloadEnv = async (item) => {
-    setIsLoading(true);
-    await updateFileEnv(serviceDir);
-    try {
-      await Command.create('run-command', [
-        '/C',
-        'pm2',
-        'reload',
-        item.name,
-        '--update-env',
-      ]).execute();
+  const startPm2Process = async (proc) => {
+    const env = proc.pm2_env || {};
+    const args = ['/C', 'pm2', 'start', proc.scriptPath, '--name', proc.name];
 
+    // Pertahankan interpreter asli (mis. python3, bash, atau path venv/dll).
+    // Nilai default PM2 ('node') dilewati agar tidak menambah opsi mubazir.
+    if (env.exec_interpreter && env.exec_interpreter !== 'node') {
+      args.push('--interpreter', env.exec_interpreter);
+    }
+
+    // Pertahankan interpreter-args (alias node-args) bila ada.
+    // Nilainya bisa berupa string atau array.
+    let interpArgs = env.node_args ?? env.interpreter_args;
+    if (Array.isArray(interpArgs)) interpArgs = interpArgs.join(' ');
+    if (interpArgs) {
+      args.push('--interpreter-args', String(interpArgs));
+    }
+
+    // Pertahankan mode cluster beserta jumlah instance-nya
+    if (env.exec_mode === 'cluster_mode') {
+      args.push('-i', String(env.instances ?? 1));
+    }
+
+    await Command.create('run-command', args, {
+      cwd: env.pm_cwd || proc.rootPath || setting.workingDirectory,
+    }).execute();
+  };
+
+  /**
+   * Memperbarui file `.env` di folder services dari setting aplikasi, lalu
+   * menerapkannya ke SEMUA proses PM2 (kecuali `pm2-logrotate`) dengan salah
+   * satu dari dua mode:
+   *
+   * - `soft` → `pm2 reload <name> --update-env`
+   *   Reload graceful tanpa downtime. `--update-env` memaksa PM2 mengambil
+   *   ulang environment, karena PM2 menyimpan cache env dan TIDAK
+   *   memperbaruinya pada restart/reload biasa. Cocok untuk perubahan umum,
+   *   namun pada sebagian kasus nilai `.env` lama bisa masih ter-cache.
+   *
+   * - `force` → `pm2 delete <name>` lalu `pm2 start ...` ulang
+   *   Mematikan proses lalu menjalankannya kembali dari nol sehingga app
+   *   membaca ulang `.env` secara bersih. Ada downtime singkat; dipakai saat
+   *   nilai env masih "nyangkut" setelah soft reload.
+   *
+   * Proses diproses bergantian dengan jeda 10 detik antar proses agar reload
+   * tidak saling menumpuk. Setelah selesai, session PM2 disimpan (`pm2 save`).
+   *
+   * @param {'soft'|'force'} mode - Mode penerapan environment.
+   * @returns {Promise<void>}
+   */
+  /**
+   * Memilih mode Reload .env lalu membuka dialog autentikasi Git (memakai
+   * alur auth yang sama seperti aksi deploy/save lainnya). Reload baru
+   * dijalankan setelah kredensial Git tervalidasi.
+   *
+   * @param {'soft'|'force'} mode - Mode penerapan environment.
+   */
+  const chooseReload = (mode) => {
+    setReloadMode(mode);
+    setSelectedDeploy('');
+    setPendingReload(true);
+    setOpenReloadDialog(false);
+    setOpenGitDialog(true);
+  };
+
+  /**
+   * @param {'soft'|'force'} mode - Mode penerapan environment.
+   * @returns {Promise<void>}
+   */
+  const handleReloadEnv = async (mode = 'soft') => {
+    if (isAdmin === false) {
+      showAlert(
+        'Aplikasi harus dijalankan sebagai Administrator untuk reload PM2.',
+        'warning',
+      );
+      return;
+    }
+    setOpenReloadDialog(false);
+    setPendingReload(false);
+    setIsReloading(true);
+    try {
+      await updateFileEnv(serviceDir);
+
+      const targets = pm2List.filter((proc) => proc.name !== 'pm2-logrotate');
+
+      if (targets.length === 0) {
+        showAlert('Tidak ada proses PM2 untuk di-reload', 'warning');
+        return;
+      }
+
+      for (let i = 0; i < targets.length; i++) {
+        const proc = targets[i];
+
+        if (mode === 'force') {
+          await Command.create('run-command', [
+            '/C',
+            'pm2',
+            'delete',
+            proc.name,
+          ]).execute();
+          await startPm2Process(proc);
+        } else {
+          await Command.create('run-command', [
+            '/C',
+            'pm2',
+            'reload',
+            proc.name,
+            '--update-env',
+          ]).execute();
+        }
+
+        // Jeda 10 detik sebelum proses berikutnya (tidak perlu setelah yang terakhir)
+        if (i < targets.length - 1) {
+          await new Promise((r) => setTimeout(r, 10000));
+        }
+      }
+
+      await syncPm2Session();
       await new Promise((r) => setTimeout(r, 200));
       fetchPm2List();
-      showAlert(`Update Env successfully`, 'success');
+      showAlert(
+        mode === 'force'
+          ? 'Force reload .env successfully'
+          : 'Soft reload .env successfully',
+        'success',
+      );
     } catch (error) {
       showAlert(`${error}`, 'error');
     } finally {
-      setIsLoading(false);
+      setIsReloading(false);
     }
   };
 
@@ -708,23 +815,23 @@ export default function TabPm2() {
         </Typography>
 
         <Box display="flex" gap={1}>
-          <Tooltip title="Clear Cache">
+          <Tooltip title="Reload .env">
             <Box
-              onClick={handleClearNpmCache}
+              onClick={() => setOpenReloadDialog(true)}
               sx={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 p: 1,
                 border: 1,
-                borderColor: 'warning.main',
+                borderColor: 'info.main',
                 borderRadius: 1,
-                color: 'warning.main',
+                color: 'info.main',
                 cursor: 'pointer',
                 '&:hover': { bgcolor: 'action.hover' },
               }}
             >
-              <CleaningServices />
+              <Autorenew />
             </Box>
           </Tooltip>
           <Button
@@ -829,17 +936,6 @@ export default function TabPm2() {
                       <Article />
                     </IconButton>
                   </Tooltip>
-                  {proc.name !== 'pm2-logrotate' ? (
-                    <Tooltip title="Update .env">
-                      <IconButton
-                        color="info"
-                        onClick={() => handleReloadEnv(proc)}
-                      >
-                        <UploadFileOutlinedIcon />
-                      </IconButton>
-                    </Tooltip>
-                  ) : null}
-
                   <Tooltip title="Stop">
                     <IconButton
                       color="warning"
@@ -873,6 +969,51 @@ export default function TabPm2() {
         </Table>
       </TableContainer>
       <Dialog
+        open={openReloadDialog}
+        onClose={() => setOpenReloadDialog(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Reload .env</DialogTitle>
+
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            File .env diperbarui dari setting lalu diterapkan ke semua proses
+            PM2. Pilih metode penerapannya:
+          </Typography>
+
+          <Box display="flex" flexDirection="column" gap={1} mt={2}>
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<Autorenew />}
+              onClick={() => chooseReload('soft')}
+            >
+              Soft Reload (reload --update-env)
+            </Button>
+
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<DeleteForever />}
+              onClick={() => chooseReload('force')}
+            >
+              Force Reload (delete + start)
+            </Button>
+          </Box>
+
+          <Typography variant="caption" color="text.secondary" display="block" mt={2}>
+            Soft: tanpa downtime, memaksa PM2 ambil ulang environment. Force:
+            hapus &amp; start ulang proses (downtime singkat) agar .env dibaca
+            ulang sepenuhnya.
+          </Typography>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setOpenReloadDialog(false)}>Batal</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
         open={openDeployDialog}
         onClose={() => setOpenDeployDialog(false)}
         fullWidth
@@ -883,7 +1024,7 @@ export default function TabPm2() {
         <DialogContent>
           <Grid container spacing={2}>
             {DEPLOY_APPS.map((app) => (
-              <Grid item xs={12} md={6} key={app.key}>
+              <Grid size={{ xs: 12, md: 6 }} key={app.key}>
                 <Paper
                   variant="outlined"
                   sx={{
@@ -958,11 +1099,28 @@ export default function TabPm2() {
       </Dialog>
       <DialogGitAuthentication
         open={openGitDialog}
-        onClose={() => setOpenGitDialog(false)}
+        onClose={() => {
+          setOpenGitDialog(false);
+          setPendingReload(false);
+        }}
         gitForm={gitForm}
         setGitForm={setGitForm}
         loading={deployLoading !== '' || isLoading}
         onSubmit={async () => {
+          // Jalur Reload .env (memakai autentikasi Git seperti aksi lain)
+          if (pendingReload) {
+            setIsLoading(true);
+            const validasi = await gitValidation(gitForm);
+            setIsLoading(false);
+            if (validasi.error) {
+              showAlert(validasi.message, 'error');
+              return;
+            }
+            setOpenGitDialog(false);
+            await handleReloadEnv(reloadMode);
+            return;
+          }
+
           if (!selectedDeploy) {
             setIsLoading(true);
             const validasi = await gitValidation(gitForm);
@@ -993,6 +1151,30 @@ export default function TabPm2() {
         <CircularProgress color="inherit" />
         <Typography variant="h6">Processing...</Typography>
       </Backdrop>
+      {isReloading && (
+        <Paper
+          elevation={6}
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            px: 2,
+            py: 1.5,
+            borderRadius: 2,
+            border: 1,
+            borderColor: 'info.main',
+          }}
+        >
+          <CircularProgress size={20} />
+          <Typography variant="body2" fontWeight="medium">
+            Aplikasi sedang direload, silakan cek berkala.
+          </Typography>
+        </Paper>
+      )}
       <Pm2LogViewer
         open={openLogViewer}
         onClose={() => setOpenLogViewer(false)}

@@ -1,18 +1,15 @@
 import { Box, Paper, Typography } from '@mui/material';
-import { Business, Copyright, Language } from '@mui/icons-material';
-import { Divider } from '@mui/material';
 
 function Footer() {
   return (
     <Paper
       elevation={0}
       sx={{
-        borderRadius: 2,
+        borderRadius: 3,
         px: 2,
-        py: 1,
-        border: '1px solid #e0e0e0',
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-        color: '#fff',
+        py: 0.75,
+        border: '1px solid #e5e7eb',
+        backgroundColor: '#ffffff',
       }}
     >
       <Box
@@ -22,11 +19,11 @@ function Footer() {
         flexWrap="wrap"
         gap={1}
       >
-        <Typography variant="body2" fontWeight="bold">
+        <Typography variant="body2" fontWeight={700} sx={{ color: '#2563eb' }}>
           MERTRACK
         </Typography>
 
-        <Typography variant="caption" sx={{ opacity: 0.8 }}>
+        <Typography variant="caption" sx={{ color: '#64748b' }}>
           Powered by PT Merindo Makmur
         </Typography>
 
@@ -37,8 +34,9 @@ function Footer() {
           target="_blank"
           rel="noopener noreferrer"
           sx={{
-            color: '#90caf9',
+            color: '#2563eb',
             textDecoration: 'none',
+            '&:hover': { textDecoration: 'underline' },
           }}
         >
           merindo.co.id

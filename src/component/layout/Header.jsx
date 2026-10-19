@@ -1,6 +1,7 @@
 import { PowerSettingsNew } from '@mui/icons-material';
 import { Circle } from '@mui/icons-material';
 import {
+  Alert,
   Box,
   Button,
   CircularProgress,
@@ -20,6 +21,7 @@ import { useEffect, useState } from 'react';
 import mertrackLogo from '../../assets/mertrack.png';
 import { showGlobalAlert } from '../AlertProvider';
 import { useAppStore } from '../../store/pathStore';
+import { useAppStatusStore } from '../../store/appStatusStore';
 import { useSettingStore } from '../../store/settingStore';
 
 const blinkRed = keyframes`
@@ -35,6 +37,7 @@ const blinkGreen = keyframes`
 
 function Header() {
   const store = useAppStore();
+  const isAdmin = useAppStatusStore((s) => s.isAdmin);
   const { workingDirectory, appName } = useSettingStore((s) => s.form);
   const [settingUp, setSettingUp] = useState(false);
   const [passwordDialog, setPasswordDialog] = useState(false);
@@ -42,56 +45,68 @@ function Header() {
 
   useEffect(() => {
     const fetchAll = async () => {
-      // 1. Fetch Nginx menggunakan path dari store
-      const nginxOut = await Command.create('run-command', [
-        '/C',
-        'nginx',
-        '-p',
-        store.nginxPath,
-        '-v',
-      ]).execute();
-      const nv = (nginxOut.stdout || nginxOut.stderr || '')
-        .replace('nginx version: ', '')
-        .trim();
-
-      // 2. Fetch yang lain
-      const pm2Out = await Command.create('run-command', [
-        '/C',
-        'pm2',
-        '-v',
-      ]).execute();
-      const nodeOut = await Command.create('run-command', [
-        '/C',
-        'node',
-        '-v',
-      ]).execute();
-      const npmOut = await Command.create('run-command', [
-        '/C',
-        'npm',
-        '-v',
-      ]).execute();
-
-      // Deteksi lokasi pm2.cmd secara dinamis supaya startup script bisa memanggilnya
-      if (!store.pm2Path) {
-        const pm2Where = await Command.create('run-command', [
+      try {
+        // 1. Fetch Nginx menggunakan path dari store
+        const nginxOut = await Command.create('run-command', [
           '/C',
-          'where',
-          'pm2.cmd',
+          'nginx',
+          '-p',
+          store.nginxPath,
+          '-v',
         ]).execute();
-        const firstMatch = (pm2Where.stdout || '')
-          .split('\n')
-          .map((s) => s.trim())
-          .find((s) => s.length > 0);
-        store.setPm2Path(firstMatch || '');
-      }
+        const nv = (nginxOut.stdout || nginxOut.stderr || '')
+          .replace('nginx version: ', '')
+          .trim();
 
-      // Update sekaligus ke Store
-      store.setVersions({
-        nginx: nv || 'Error',
-        pm2: pm2Out.code === 0 ? pm2Out.stdout.trim() : 'Error',
-        node: nodeOut.stdout.trim() || 'Error',
-        npm: npmOut.stdout.trim() || 'Error',
-      });
+        // 2. Fetch yang lain
+        const pm2Out = await Command.create('run-command', [
+          '/C',
+          'pm2',
+          '-v',
+        ]).execute();
+        const nodeOut = await Command.create('run-command', [
+          '/C',
+          'node',
+          '-v',
+        ]).execute();
+        const npmOut = await Command.create('run-command', [
+          '/C',
+          'npm',
+          '-v',
+        ]).execute();
+
+        // Deteksi lokasi pm2.cmd secara dinamis supaya startup script bisa memanggilnya
+        if (!store.pm2Path) {
+          const pm2Where = await Command.create('run-command', [
+            '/C',
+            'where',
+            'pm2.cmd',
+          ]).execute();
+          const firstMatch = (pm2Where.stdout || '')
+            .split('\n')
+            .map((s) => s.trim())
+            .find((s) => s.length > 0);
+          store.setPm2Path(firstMatch || '');
+        }
+
+        // Update sekaligus ke Store
+        store.setVersions({
+          nginx: nv || 'Error',
+          pm2: pm2Out.code === 0 ? pm2Out.stdout.trim() : 'Error',
+          node: nodeOut.stdout.trim() || 'Error',
+          npm: npmOut.stdout.trim() || 'Error',
+        });
+      } catch (err) {
+        // Salah satu tool (nginx/pm2/node/npm) tidak ditemukan → jangan biarkan
+        // unhandled rejection; tandai Error dan beri tahu user sekali.
+        store.setVersions({
+          nginx: 'Error',
+          pm2: 'Error',
+          node: 'Error',
+          npm: 'Error',
+        });
+        showGlobalAlert(`Gagal membaca versi tool: ${err}`, 'warning');
+      }
     };
 
     fetchAll();
@@ -143,16 +158,34 @@ function Header() {
   };
 
   return (
-    <Paper sx={{ borderRadius: 2 }}>
-      <Grid container spacing={2} alignItems="center">
-        <Grid item size={12}>
+    <Paper
+      elevation={0}
+      sx={{
+        borderRadius: 2,
+        border: '1px solid #e5e7eb',
+        bgcolor: '#ffffff',
+        p: 0.75,
+      }}
+    >
+      <Grid container spacing={1} alignItems="center">
+        <Grid size={12}>
           {/* 3 BAGIAN HORIZONTAL: IMAGE | DEVICE INFO | SETUP STARTUP */}
-          <Box display="flex" alignItems="center">
+          <Box
+            display="flex"
+            alignItems="center"
+            height={38}
+            overflow="visible"
+          >
             {/* BAGIAN 1 - IMAGE INFO */}
-            <Box flex={1}>
+            <Box
+              flex={1}
+              display="flex"
+              alignItems="center"
+              overflow="visible"
+            >
               <img
                 src={mertrackLogo}
-                style={{ height: 75, width: 'auto' }}
+                style={{ height: 48, width: 'auto' }}
                 loading="lazy"
               />
             </Box>
@@ -161,47 +194,62 @@ function Header() {
             <Box flex={1} display="flex" justifyContent="center">
               <Box
                 sx={{
-                  width: 460,
-                  height: 60,
-                  borderRadius: 3,
-                  bgcolor: '#ffffff',
-                  border: 1,
+                  minWidth: 300,
+                  height: 38,
+                  borderRadius: '10px',
+                  bgcolor: '#f8fafc',
+                  border: '1px solid #e5e7eb',
+                  px: 1.5,
+                  gap: 0.75,
                   display: 'flex',
                   justifyContent: 'space-evenly',
                   alignItems: 'center',
-                  fontWeight: 'bold',
-                  fontSize: '1.2rem',
                 }}
               >
                 <Typography
-                  variant="h6"
+                  variant="body2"
                   fontWeight="bold"
-                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    fontSize: 12.5,
+                  }}
                 >
                   <Circle
-                    fontSize="small"
+                    sx={{ fontSize: 12 }}
                     color={store.nodeVersion ? 'success' : 'error'}
                   />
                   node {store.nodeVersion}
                 </Typography>
                 <Typography
-                  variant="h6"
+                  variant="body2"
                   fontWeight="bold"
-                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    fontSize: 12.5,
+                  }}
                 >
                   <Circle
-                    fontSize="small"
+                    sx={{ fontSize: 12 }}
                     color={store.npmVersion ? 'success' : 'error'}
                   />
                   npm {store.npmVersion}
                 </Typography>
                 <Typography
-                  variant="h6"
+                  variant="body2"
                   fontWeight="bold"
-                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    fontSize: 12.5,
+                  }}
                 >
                   <Circle
-                    fontSize="small"
+                    sx={{ fontSize: 12 }}
                     color={store.pm2Version ? 'success' : 'error'}
                   />
                   pm2 {store.pm2Version}
@@ -215,22 +263,22 @@ function Header() {
               display="flex"
               alignItems="center"
               justifyContent="flex-end"
-              pr={2}
+              pr={1}
             >
               <Button
-                variant="outlined"
+                variant="contained"
+                color="primary"
                 size="small"
-                color="warning"
                 disabled={settingUp}
                 onClick={handleSetupStartup}
                 startIcon={
                   settingUp ? (
-                    <CircularProgress size={16} color="inherit" />
+                    <CircularProgress size={14} color="inherit" />
                   ) : (
-                    <PowerSettingsNew />
+                    <PowerSettingsNew fontSize="small" />
                   )
                 }
-                sx={{ fontWeight: 600, textTransform: 'none' }}
+                sx={{ px: 1.5, py: 0.5, borderRadius: '10px', fontSize: 12.5 }}
               >
                 {settingUp ? 'Setting...' : 'Setup Startup'}
               </Button>
@@ -238,6 +286,26 @@ function Header() {
           </Box>
         </Grid>
       </Grid>
+
+      {isAdmin === false && (
+        <Alert
+          severity="warning"
+          sx={{
+            mt: 0.5,
+            py: 0,
+            borderRadius: 1.5,
+            fontSize: 11.5,
+            lineHeight: 1.35,
+            alignItems: 'center',
+            '& .MuiAlert-icon': { fontSize: 16, py: 0, mr: 0.75 },
+            '& .MuiAlert-message': { py: 0.4 },
+          }}
+        >
+          Aplikasi harus dijalankan sebagai <strong>Administrator</strong>. Tutup
+          lalu buka kembali dengan <strong>Run as administrator</strong> agar PM2
+          berfungsi (pemantauan PM2 dihentikan).
+        </Alert>
+      )}
 
       {/* PASSWORD DIALOG UNTUK TASK SCHEDULER */}
       <Dialog
