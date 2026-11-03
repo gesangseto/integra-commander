@@ -7,8 +7,9 @@ Cara me-remote Ubuntu Server:
 
 Cara install mertrack di Ubuntu Server:
 
-1. copy 4 file dibawah ini kedalam server e.g.: /home/merindo
+1. copy 4 file dibawah ini kedalam server, e.g.: /home/<user-server>
    [install.sh, app-installer.sh, mertrack-config.sh, mertrack-installer.sh]
+   (user server bebas siapa saja — script otomatis memakai user yang menjalankan sudo)
 2. Jalankan command "chmod +x ./install.sh"
 
 Untuk menjalankan installer cukup jalankan command "./install.sh"

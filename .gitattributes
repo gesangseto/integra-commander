@@ -1,0 +1,3 @@
+# Script shell harus selalu LF di working tree: CRLF membuat "#!/bin/bash^M"
+# sehingga script tidak bisa dijalankan setelah di-copy ke Ubuntu server.
+*.sh text eol=lf

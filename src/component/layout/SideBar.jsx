@@ -25,14 +25,14 @@ const navButtonSx = (active) => ({
   width: 52,
   height: 52,
   borderRadius: '14px',
-  color: active ? '#2563eb' : '#64748b',
+  color: active ? '#2563eb' : '#cbd5e1',
   backgroundColor: active ? '#dbeafe' : 'transparent',
   border: '1px solid',
   borderColor: active ? '#bfdbfe' : 'transparent',
   transition: 'all .18s ease',
   '&:hover': {
-    backgroundColor: active ? '#dbeafe' : '#f1f5f9',
-    color: active ? '#1d4ed8' : '#0f172a',
+    backgroundColor: active ? '#dbeafe' : 'rgba(255,255,255,0.1)',
+    color: active ? '#1d4ed8' : '#ffffff',
   },
 });
 
@@ -78,8 +78,8 @@ export default function SideBar() {
       sx={{
         width: 96,
         height: '99vh',
-        bgcolor: '#ffffff',
-        borderRight: '1px solid #e5e7eb',
+        bgcolor: '#070069',
+        borderRight: '1px solid #070066',
         p: 1.5,
         display: 'flex',
         flexDirection: 'column',
@@ -93,16 +93,16 @@ export default function SideBar() {
         <Typography
           variant="subtitle1"
           fontWeight={800}
-          sx={{ color: '#0f172a', letterSpacing: 0.5 }}
+          sx={{ color: '#ffffff', letterSpacing: 0.5 }}
         >
           {time}
         </Typography>
-        <Typography variant="caption" sx={{ color: '#64748b' }}>
+        <Typography variant="caption" sx={{ color: '#bfdbfe' }}>
           {date}
         </Typography>
       </Box>
 
-      <Divider sx={{ width: '100%' }} />
+      <Divider sx={{ width: '100%', borderColor: 'rgba(255,255,255,0.2)' }} />
 
       {/* BUTTON GROUP */}
       <Stack spacing={1} alignItems="center">
@@ -120,7 +120,13 @@ export default function SideBar() {
         <Tooltip title="Settings">
           <Button
             aria-label="Settings"
-            sx={navButtonSx(activeMenu === 1)}
+            sx={{
+              ...navButtonSx(false),
+              backgroundColor: '#2563eb',
+              color: '#ffffff',
+              borderColor: '#2563eb',
+              '&:hover': { backgroundColor: '#1d4ed8', color: '#ffffff' },
+            }}
             onClick={() => handleClickMenu(1)}
           >
             <SettingsIcon fontSize="medium" />
@@ -130,8 +136,10 @@ export default function SideBar() {
           <Button
             sx={{
               ...navButtonSx(false),
-              color: '#dc2626',
-              '&:hover': { backgroundColor: '#fee2e2', color: '#b91c1c' },
+              backgroundColor: '#dc2626',
+              color: '#ffffff',
+              borderColor: '#dc2626',
+              '&:hover': { backgroundColor: '#b91c1c', color: '#ffffff' },
             }}
             onClick={async () => {
               const ok = await showConfirm({

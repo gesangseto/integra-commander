@@ -101,8 +101,8 @@ export default function Info() {
   return (
     <Box
       sx={{
-        backgroundColor: '#ffffff',
-        border: '1px solid #e5e7eb',
+        backgroundColor: '#313131',
+        border: '1px solid #424242',
         px: 2.5,
         py: 2,
         borderRadius: 3,
@@ -118,6 +118,7 @@ export default function Info() {
             sx={{
               letterSpacing: 1.5,
               fontWeight: 'bold',
+              color: '#f9fafb',
             }}
           >
             System Resources
@@ -153,6 +154,7 @@ export default function Info() {
             sx={{
               letterSpacing: 1.5,
               fontWeight: 'bold',
+              color: '#f9fafb',
             }}
           >
             Mertrack Memory Usage
@@ -191,12 +193,12 @@ export default function Info() {
         pt={0.5}
         display="flex"
         justifyContent="space-between"
-        borderTop="1px solid #e5e7eb"
+        borderTop="1px solid rgba(255,255,255,0.15)"
       >
-        <Typography variant="caption" sx={{ color: '#64748b' }}>
+        <Typography variant="caption" sx={{ color: '#9ca3af' }}>
           Total RAM : {(data.totalMemoryMB / 1024).toFixed(1)} GB
         </Typography>
-        <Typography variant="caption" sx={{ color: '#64748b' }}>
+        <Typography variant="caption" sx={{ color: '#9ca3af' }}>
           Mertrack Total Usage RAM :
           {(data.totalMemoryMB > 0
             ? (totalMertrackMemory / data.totalMemoryMB) * 100
@@ -222,12 +224,15 @@ const ResourceItemPercent = ({ label, value = 0, color }) => {
   return (
     <Box mb={1}>
       <Box display="flex" justifyContent="space-between" mb={0.5}>
-        <Typography variant="body2">{label}</Typography>
+        <Typography variant="body2" sx={{ color: '#d1d5db' }}>
+          {label}
+        </Typography>
 
         <Typography
           sx={{
             fontFamily: 'monospace',
             fontWeight: 'bold',
+            color: '#ffffff',
           }}
         >
           {percent.toFixed(1)}%
@@ -240,7 +245,7 @@ const ResourceItemPercent = ({ label, value = 0, color }) => {
         sx={{
           height: 6,
           borderRadius: 5,
-          bgcolor: '#f1f5f9',
+          bgcolor: '#414141',
           '& .MuiLinearProgress-bar': {
             bgcolor: color,
           },
@@ -261,12 +266,15 @@ const ResourceItemMemory = ({ label, value = 0, totalMB = 0, color }) => {
   return (
     <Box mb={1}>
       <Box display="flex" justifyContent="space-between" mb={0.5}>
-        <Typography variant="body2">{label}</Typography>
+        <Typography variant="body2" sx={{ color: '#d1d5db' }}>
+          {label}
+        </Typography>
 
         <Typography
           sx={{
             fontFamily: 'monospace',
             fontWeight: 'bold',
+            color: '#ffffff',
           }}
         >
           {usedMB.toFixed(0)} MB / {(totalMB / 1024).toFixed(1)} GB (
@@ -280,7 +288,7 @@ const ResourceItemMemory = ({ label, value = 0, totalMB = 0, color }) => {
         sx={{
           height: 6,
           borderRadius: 5,
-          bgcolor: '#f1f5f9',
+          bgcolor: '#414141',
           '& .MuiLinearProgress-bar': {
             bgcolor: color,
           },

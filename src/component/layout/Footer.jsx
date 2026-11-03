@@ -8,8 +8,8 @@ function Footer() {
         borderRadius: 3,
         px: 2,
         py: 0.75,
-        border: '1px solid #e5e7eb',
-        backgroundColor: '#ffffff',
+        border: '1px solid #182136',
+        backgroundColor: '#182136',
       }}
     >
       <Box
@@ -19,11 +19,11 @@ function Footer() {
         flexWrap="wrap"
         gap={1}
       >
-        <Typography variant="body2" fontWeight={700} sx={{ color: '#2563eb' }}>
+        <Typography variant="body2" fontWeight={700} sx={{ color: '#f8f8f8' }}>
           MERTRACK
         </Typography>
 
-        <Typography variant="caption" sx={{ color: '#64748b' }}>
+        <Typography variant="caption" sx={{ color: '#e5e7eb' }}>
           Powered by PT Merindo Makmur
         </Typography>
 
@@ -34,7 +34,7 @@ function Footer() {
           target="_blank"
           rel="noopener noreferrer"
           sx={{
-            color: '#2563eb',
+            color: '#e5e7eb',
             textDecoration: 'none',
             '&:hover': { textDecoration: 'underline' },
           }}

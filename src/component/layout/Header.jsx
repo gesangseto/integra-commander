@@ -266,8 +266,7 @@ function Header() {
               pr={1}
             >
               <Button
-                variant="contained"
-                color="primary"
+                variant="outlined"
                 size="small"
                 disabled={settingUp}
                 onClick={handleSetupStartup}
@@ -278,7 +277,19 @@ function Header() {
                     <PowerSettingsNew fontSize="small" />
                   )
                 }
-                sx={{ px: 1.5, py: 0.5, borderRadius: '10px', fontSize: 12.5 }}
+                sx={{
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: '10px',
+                  fontSize: 12.5,
+                  color: '#ff9100',
+                  borderColor: '#ff9100',
+                  backgroundColor: 'transparent',
+                  '&:hover': {
+                    borderColor: '#ff9100',
+                    backgroundColor: 'rgba(255,145,0,0.08)',
+                  },
+                }}
               >
                 {settingUp ? 'Setting...' : 'Setup Startup'}
               </Button>
