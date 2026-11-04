@@ -15,10 +15,7 @@ import {
   Typography,
 } from '@mui/material';
 
-import {
-  DeleteForeverOutlined,
-  ExitToAppOutlined,
-} from '@mui/icons-material';
+import { DeleteForeverOutlined, ExitToAppOutlined } from '@mui/icons-material';
 import { readDir, remove } from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
 
@@ -167,7 +164,10 @@ export default function Pm2LogViewer({ open, onClose, process }) {
             entry.name.startsWith(`${logBase}__`) &&
             /\.log(\.gz)?$/i.test(entry.name),
         )
-        .map((entry) => ({ name: entry.name, path: `${logDir}\\${entry.name}` }))
+        .map((entry) => ({
+          name: entry.name,
+          path: `${logDir}\\${entry.name}`,
+        }))
         .sort((a, b) => a.name.localeCompare(b.name));
       setRotatedLogs(found);
     } catch {
@@ -290,17 +290,20 @@ export default function Pm2LogViewer({ open, onClose, process }) {
           }}
         >
           {/* STATUS */}
-          <Box
-            sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2, mt: 2 }}
-          >
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2, mt: 2 }}>
             <Chip
               label={process?.pm2_env?.status || 'unknown'}
-              color={process?.pm2_env?.status === 'online' ? 'success' : 'error'}
+              color={
+                process?.pm2_env?.status === 'online' ? 'success' : 'error'
+              }
             />
 
             <Chip variant="outlined" label={`PID : ${process?.pid || '-'}`} />
 
-            <Chip color="warning" label={`CPU : ${process?.monit?.cpu || 0}%`} />
+            <Chip
+              color="warning"
+              label={`CPU : ${process?.monit?.cpu || 0}%`}
+            />
 
             <Chip
               color="info"

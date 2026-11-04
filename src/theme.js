@@ -27,7 +27,7 @@ const compactTheme = createTheme({
   shape: { borderRadius: 10 },
   typography: {
     fontFamily:
-      "'Inter','Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif",
+      "'Inter Variable','Inter','Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif",
     fontSize: 13,
     h5: { fontSize: '1.15rem', fontWeight: 700 },
     h6: { fontSize: '1rem', fontWeight: 700 },

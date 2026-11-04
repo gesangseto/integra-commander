@@ -24,7 +24,7 @@ function Footer() {
         </Typography>
 
         <Typography variant="caption" sx={{ color: '#e5e7eb' }}>
-          Powered by PT Merindo Makmur
+          Copyright © PT Merindo Makmur
         </Typography>
 
         <Typography

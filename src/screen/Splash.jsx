@@ -8,8 +8,8 @@ export default function Splash() {
     // Simulasi perubahan teks status agar terasa lebih dinamis
     const timers = [
       setTimeout(() => setStatus('Menghubungkan ke PM2...'), 1000),
-      setTimeout(() => setStatus('Membaca konfigurasi Nginx...'), 2000),
-      setTimeout(() => setStatus('Mempersiapkan dashboard...'), 3000),
+      setTimeout(() => setStatus('Membaca konfigurasi Nginx...'), 1000),
+      setTimeout(() => setStatus('Mempersiapkan dashboard...'), 1000),
     ];
     return () => timers.forEach(clearTimeout);
   }, []);

@@ -100,15 +100,20 @@ while true; do
                 ;;
 
                 7)
-                    PG_CONF=$(su - postgres -c "psql -t -c 'SHOW config_file;'" | xargs dirname)/postgresql.conf
-                    HBA_CONF=$(su - postgres -c "psql -t -c 'SHOW hba_file;'" | xargs)
+                    if ! su - postgres -c "psql -t -c 'SHOW config_file;'" >/dev/null 2>&1; then
+                        echo "❌ PostgreSQL tidak berjalan / belum terinstall."
+                        echo "   Jalankan menu 1 (Install) dulu, lalu coba lagi."
+                    else
+                        PG_CONF=$(su - postgres -c "psql -t -c 'SHOW config_file;'" | xargs dirname)/postgresql.conf
+                        HBA_CONF=$(su - postgres -c "psql -t -c 'SHOW hba_file;'" | xargs)
 
-                    sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/" "$PG_CONF"
+                        sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/" "$PG_CONF"
 
-                    grep -q "0.0.0.0/0" "$HBA_CONF" || echo "host all all 0.0.0.0/0 md5" >> "$HBA_CONF"
+                        grep -q "0.0.0.0/0" "$HBA_CONF" || echo "host all all 0.0.0.0/0 md5" >> "$HBA_CONF"
 
-                    systemctl restart postgresql
-                    echo "✅ Remote access aktif"
+                        systemctl restart postgresql
+                        echo "✅ Remote access aktif"
+                    fi
                 ;;
 
                 8)
@@ -126,32 +131,56 @@ while true; do
                         echo "Data directory sekarang: $CURRENT_DATA"
                         read -p "Lokasi data baru (kosong = batal): " NEW_DATA
 
+                        # Validasi: PostgreSQL menolak path relatif, dan jangan
+                        # pernah mengubah config kalau sumbernya tidak ada.
+                        if [ -n "$NEW_DATA" ] && [ "${NEW_DATA:0:1}" != "/" ]; then
+                            echo "❌ Path harus absolut (diawali '/'), contoh: /MERTRACKDB"
+                            NEW_DATA=""
+                        fi
+                        if [ -n "$NEW_DATA" ] && [ "$NEW_DATA" = "$CURRENT_DATA" ]; then
+                            echo "ℹ️ Path baru sama dengan yang sekarang, tidak ada yang dipindah."
+                            NEW_DATA=""
+                        fi
+                        if [ -n "$NEW_DATA" ] && [ ! -d "$CURRENT_DATA" ]; then
+                            echo "❌ Folder data sekarang tidak ditemukan: $CURRENT_DATA"
+                            NEW_DATA=""
+                        fi
+
                         if [ -n "$NEW_DATA" ]; then
                             echo "🛑 Menghentikan PostgreSQL..."
                             systemctl stop "postgresql@$PG_MAJOR-main"
 
                             mkdir -p "$NEW_DATA"
                             echo "📦 Menyalin data (bisa lama tergantung ukuran DB)..."
-                            cp -a "$CURRENT_DATA/." "$NEW_DATA/"
-                            chown -R postgres:postgres "$NEW_DATA"
-
-                            if grep -q "^data_directory" "$PG_CONF"; then
-                                sed -i "s|^data_directory.*|data_directory = '$NEW_DATA'|" "$PG_CONF"
+                            if ! cp -a "$CURRENT_DATA/." "$NEW_DATA/"; then
+                                echo "❌ Gagal menyalin data. Config dikembalikan, PostgreSQL start lagi."
+                                chown -R postgres:postgres "$CURRENT_DATA"
+                                systemctl start "postgresql@$PG_MAJOR-main"
                             else
-                                echo "data_directory = '$NEW_DATA'" >> "$PG_CONF"
+                                chown -R postgres:postgres "$NEW_DATA"
+
+                                if grep -q "^data_directory" "$PG_CONF"; then
+                                    sed -i "s|^data_directory.*|data_directory = '$NEW_DATA'|" "$PG_CONF"
+                                else
+                                    echo "data_directory = '$NEW_DATA'" >> "$PG_CONF"
+                                fi
+
+                                mkdir -p "/etc/systemd/system/postgresql@$PG_MAJOR-main.service.d"
+                                printf '[Service]\nReadWriteDirectories=%s\n' "$NEW_DATA" > "/etc/systemd/system/postgresql@$PG_MAJOR-main.service.d/override.conf"
+                                systemctl daemon-reload
+
+                                echo "▶️ Menjalankan PostgreSQL..."
+                                if systemctl start "postgresql@$PG_MAJOR-main"; then
+                                    echo "✅ Data directory berpindah ke: $NEW_DATA"
+                                    su - postgres -c "psql -t -c 'SHOW data_directory;'"
+                                    echo "⚠️ Folder lama BELUM dihapus. Setelah yakin semua normal:"
+                                    echo "   sudo rm -rf $CURRENT_DATA"
+                                else
+                                    echo "❌ PostgreSQL gagal start dengan path baru."
+                                    echo "   Kembalikan dengan: sudo sed -i \"s|^data_directory.*|data_directory = '$CURRENT_DATA'|\" $PG_CONF"
+                                    echo "   lalu: sudo systemctl restart postgresql@$PG_MAJOR-main"
+                                fi
                             fi
-
-                            mkdir -p "/etc/systemd/system/postgresql@$PG_MAJOR-main.service.d"
-                            printf '[Service]\nReadWriteDirectories=%s\n' "$NEW_DATA" > "/etc/systemd/system/postgresql@$PG_MAJOR-main.service.d/override.conf"
-                            systemctl daemon-reload
-
-                            echo "▶️ Menjalankan PostgreSQL..."
-                            systemctl start "postgresql@$PG_MAJOR-main"
-
-                            echo "✅ Data directory berpindah ke: $NEW_DATA"
-                            su - postgres -c "psql -t -c 'SHOW data_directory;'"
-                            echo "⚠️ Folder lama BELUM dihapus. Setelah yakin semua normal:"
-                            echo "   sudo rm -rf $CURRENT_DATA"
                         else
                             echo "❌ Dibatalkan."
                         fi

@@ -1002,7 +1002,12 @@ export default function TabPm2() {
             </Button>
           </Box>
 
-          <Typography variant="caption" color="text.secondary" display="block" mt={2}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            display="block"
+            mt={2}
+          >
             Soft: tanpa downtime, memaksa PM2 ambil ulang environment. Force:
             hapus &amp; start ulang proses (downtime singkat) agar .env dibaca
             ulang sepenuhnya.
