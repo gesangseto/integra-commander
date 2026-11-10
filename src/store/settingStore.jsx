@@ -4,6 +4,15 @@ import { persist } from 'zustand/middleware';
 export const useSettingStore = create(
   persist(
     (set) => ({
+      // Kredensial Git disimpan terpisah dari `form` supaya tidak ikut
+      // terhapus saat reset/refresh konfigurasi aplikasi.
+      gitAuth: { username: '', password: '' },
+
+      setGitAuth: (data) =>
+        set((state) => ({
+          gitAuth: { ...state.gitAuth, ...data },
+        })),
+
       form: {
         appName: 'API_CORE_MERTRACK',
         workingDirectory: '',

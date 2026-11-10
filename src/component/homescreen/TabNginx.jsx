@@ -50,6 +50,7 @@ import { openLocation } from '../../utility';
 import { useAlert } from '../AlertProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
 import { gitCloneFe } from '../../utility/gitUtility';
+import useGitAuth from '../../utility/useGitAuth';
 import { useConfirm } from '../ConfirmProvider';
 
 const DEPLOY_APPS = [
@@ -70,7 +71,7 @@ export default function TabNginx() {
     `${nginxPath}\\conf\\sites-enabled`,
   );
   const setting = useSettingStore((state) => state.form);
-  const [gitForm, setGitForm] = useState({ username: '', password: '' });
+  const [gitForm, setGitForm] = useGitAuth();
   const [openGitDialog, setOpenGitDialog] = useState(false);
   const [selectedDeploy, setSelectedDeploy] = useState('');
   const [openDeployDialog, setOpenDeployDialog] = useState(false);

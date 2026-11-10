@@ -15,10 +15,13 @@ function DialogGitAuthentication({
   setGitForm,
   onSubmit,
   loading = false,
+  title = 'Git Authentication',
+  submitLabel = 'Execute',
+  onDelete,
 }) {
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Git Authentication</DialogTitle>
+      <DialogTitle>{title}</DialogTitle>
 
       <DialogContent>
         <Box mt={1}>
@@ -52,12 +55,18 @@ function DialogGitAuthentication({
       </DialogContent>
 
       <DialogActions>
+        {onDelete && (
+          <Button color="error" onClick={onDelete} disabled={loading} sx={{ mr: 'auto' }}>
+            Hapus
+          </Button>
+        )}
+
         <Button onClick={onClose} disabled={loading}>
           Cancel
         </Button>
 
         <Button variant="contained" onClick={onSubmit} disabled={loading}>
-          {loading ? 'Processing...' : 'Execute'}
+          {loading ? 'Processing...' : submitLabel}
         </Button>
       </DialogActions>
     </Dialog>

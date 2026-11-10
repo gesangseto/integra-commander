@@ -39,6 +39,7 @@ import { useSettingStore } from '../../store/settingStore';
 import { useAppStatusStore } from '../../store/appStatusStore';
 import { humanizeText, openLocation } from '../../utility';
 import { gitClone, gitValidation } from '../../utility/gitUtility';
+import useGitAuth from '../../utility/useGitAuth';
 import { useAlert } from '../AlertProvider';
 import { useConfirm } from '../ConfirmProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
@@ -103,7 +104,7 @@ export default function TabPm2() {
   const [isLoading, setIsLoading] = useState(false);
   const [openGitDialog, setOpenGitDialog] = useState(false);
   const [selectedDeploy, setSelectedDeploy] = useState('');
-  const [gitForm, setGitForm] = useState({ username: '', password: '' });
+  const [gitForm, setGitForm] = useGitAuth();
 
   const setting = useSettingStore((state) => state.form);
   const isAdmin = useAppStatusStore((state) => state.isAdmin);

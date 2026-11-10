@@ -1,5 +1,6 @@
 import { PowerSettingsNew } from '@mui/icons-material';
 import { Circle } from '@mui/icons-material';
+import { Lock as LockIcon, LockOpen as LockOpenIcon } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -10,9 +11,11 @@ import {
   DialogContent,
   DialogTitle,
   Grid,
+  IconButton,
   keyframes,
   Paper,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import { invoke } from '@tauri-apps/api/core';
@@ -20,9 +23,13 @@ import { Command } from '@tauri-apps/plugin-shell';
 import { useEffect, useState } from 'react';
 import mertrackLogo from '../../assets/mertrack.png';
 import { showGlobalAlert } from '../AlertProvider';
+import { useConfirm } from '../ConfirmProvider';
+import DialogGitAuthentication from '../DialogGitAuthentication';
 import { useAppStore } from '../../store/pathStore';
 import { useAppStatusStore } from '../../store/appStatusStore';
 import { useSettingStore } from '../../store/settingStore';
+import { gitValidation } from '../../utility/gitUtility';
+import useGitAuth from '../../utility/useGitAuth';
 
 const blinkRed = keyframes`
   0% { background-color: #ff8383; }
@@ -37,11 +44,49 @@ const blinkGreen = keyframes`
 
 function Header() {
   const store = useAppStore();
+  const { confirm: showConfirm } = useConfirm();
   const isAdmin = useAppStatusStore((s) => s.isAdmin);
   const { workingDirectory, appName } = useSettingStore((s) => s.form);
   const [settingUp, setSettingUp] = useState(false);
   const [passwordDialog, setPasswordDialog] = useState(false);
   const [password, setPassword] = useState('');
+
+  // ===== GIT AUTHENTICATION (ikon gembok) =====
+  const gitAuth = useSettingStore((s) => s.gitAuth);
+  const setGitAuth = useSettingStore((s) => s.setGitAuth);
+  const [gitForm, setGitForm] = useGitAuth();
+  const [gitDialog, setGitDialog] = useState(false);
+  const [savingGit, setSavingGit] = useState(false);
+  const hasGitAuth = Boolean(gitAuth.username && gitAuth.password);
+
+  const handleSaveGitAuth = async () => {
+    setSavingGit(true);
+    const validasi = await gitValidation(gitForm);
+    setSavingGit(false);
+    if (validasi.error) {
+      showGlobalAlert(validasi.message, 'error');
+      return;
+    }
+    setGitAuth(gitForm);
+    setGitDialog(false);
+    showGlobalAlert(
+      'Git authentication tersimpan. Semua form akan terisi otomatis.',
+      'success',
+    );
+  };
+
+  const handleDeleteGitAuth = async () => {
+    const ok = await showConfirm({
+      title: 'Hapus Git Authentication',
+      message:
+        'Kredensial Git yang tersimpan akan dihapus, semua form kembali kosong dan perlu diisi manual. Lanjut?',
+      severity: 'danger',
+    });
+    if (!ok) return;
+    setGitAuth({ username: '', password: '' });
+    setGitDialog(false);
+    showGlobalAlert('Git authentication dihapus.', 'success');
+  };
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -257,14 +302,51 @@ function Header() {
               </Box>
             </Box>
 
-            {/* BAGIAN 3 - SETUP STARTUP BUTTON (paling kanan) */}
+            {/* BAGIAN 3 - GIT AUTH + SETUP STARTUP BUTTON (paling kanan) */}
             <Box
               flex={1}
               display="flex"
               alignItems="center"
               justifyContent="flex-end"
+              gap={1}
               pr={1}
             >
+              <Tooltip
+                title={
+                  hasGitAuth
+                    ? `TERSIMPAN — Git authentication atas nama "${gitAuth.username}". Klik untuk memperbarui atau menghapus.`
+                    : 'BELUM TERSIMPAN — Klik untuk menyimpan Git authentication agar semua form terisi otomatis.'
+                }
+              >
+                <IconButton
+                  size="small"
+                  disabled={savingGit}
+                  onClick={() => setGitDialog(true)}
+                  sx={{
+                    width: 34,
+                    height: 34,
+                    border: hasGitAuth ? '1px solid #16a34a' : '1px dashed #94a3b8',
+                    borderRadius: '10px',
+                    color: hasGitAuth ? '#16a34a' : '#ff9100',
+                    backgroundColor: hasGitAuth
+                      ? 'rgba(22,163,74,0.12)'
+                      : 'transparent',
+                    '&:hover': {
+                      backgroundColor: hasGitAuth
+                        ? 'rgba(22,163,74,0.2)'
+                        : 'rgba(255,145,0,0.08)',
+                    },
+                  }}
+                >
+                  {savingGit ? (
+                    <CircularProgress size={14} color="inherit" />
+                  ) : hasGitAuth ? (
+                    <LockIcon fontSize="small" />
+                  ) : (
+                    <LockOpenIcon fontSize="small" />
+                  )}
+                </IconButton>
+              </Tooltip>
               <Button
                 variant="outlined"
                 size="small"
@@ -354,6 +436,20 @@ function Header() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <DialogGitAuthentication
+        open={gitDialog}
+        onClose={() => {
+          if (!savingGit) setGitDialog(false);
+        }}
+        gitForm={gitForm}
+        setGitForm={setGitForm}
+        loading={savingGit}
+        title="Simpan Git Authentication"
+        submitLabel="Simpan"
+        onDelete={hasGitAuth ? handleDeleteGitAuth : undefined}
+        onSubmit={handleSaveGitAuth}
+      />
     </Paper>
   );
 }

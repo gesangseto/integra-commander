@@ -18,6 +18,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 
 import { useSettingStore } from '../store/settingStore';
+import useGitAuth from '../utility/useGitAuth';
 import { useConfirm } from '../component/ConfirmProvider';
 import { useAlert } from '../component/AlertProvider';
 import { gitValidation } from '../utility/gitUtility';
@@ -133,9 +134,12 @@ function SettingScreen() {
   const resetStore = useSettingStore((state) => state.resetForm);
   // ================= LOCAL FORM =================
   const [form, setLocalForm] = useState(zustandForm);
-  const [gitForm, setGitForm] = useState({ username: '', password: '' });
+  const [gitForm, setGitForm] = useGitAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [openGitDialog, setOpenGitDialog] = useState(false);
+  const gitAuth = useSettingStore((state) => state.gitAuth);
+  const setGitAuth = useSettingStore((state) => state.setGitAuth);
+  const hasGitAuth = Boolean(gitAuth.username && gitAuth.password);
   // ================= AUTOSTART =================
   const [checked, setChecked] = useState(false);
   // ================= LOAD IP =================
@@ -254,13 +258,15 @@ function SettingScreen() {
         onSubmit={async () => {
           setIsLoading(true);
           let validasi = await gitValidation(gitForm);
-          if (!validasi.error) {
-            handleSave();
-            setOpenGitDialog(false);
-          } else {
-            showAlert(validasi.message, 'error');
-          }
           setIsLoading(false);
+          if (validasi.error) {
+            showAlert(validasi.message, 'error');
+            return;
+          }
+          // Simpan juga kredensialnya agar form lain auto-fill.
+          setGitAuth(gitForm);
+          handleSave();
+          setOpenGitDialog(false);
         }}
       />
       {/* ========================================================= */}
@@ -628,9 +634,13 @@ function SettingScreen() {
               message: 'Apakah anda yakin ingin menyimpan perubahan?',
               severity: 'danger',
             });
-            if (ok) {
-              setOpenGitDialog(true);
+            if (!ok) return;
+            // Kredensial sudah tersimpan: tidak perlu ditanya lagi.
+            if (hasGitAuth) {
+              handleSave();
+              return;
             }
+            setOpenGitDialog(true);
           }}
         >
           Save Settings

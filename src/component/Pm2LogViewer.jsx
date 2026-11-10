@@ -20,6 +20,7 @@ import { readDir, remove } from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
 
 import { gitValidation } from '../utility/gitUtility';
+import useGitAuth from '../utility/useGitAuth';
 import { useAlert } from './AlertProvider';
 import { useConfirm } from './ConfirmProvider';
 import DialogGitAuthentication from './DialogGitAuthentication';
@@ -84,7 +85,7 @@ export default function Pm2LogViewer({ open, onClose, process }) {
   // Log hasil rotasi (pm2-logrotate) milik proses yang sedang dibuka
   const [rotatedLogs, setRotatedLogs] = useState([]);
   const [openGitDialog, setOpenGitDialog] = useState(false);
-  const [gitForm, setGitForm] = useState({ username: '', password: '' });
+  const [gitForm, setGitForm] = useGitAuth();
   const [isPurging, setIsPurging] = useState(false);
 
   const bottomRef = useRef(null);
