@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   Delete,
   Folder,
   FolderOpen,
+  Info,
   PlayArrow,
   Refresh,
   RocketLaunch,
@@ -46,10 +47,12 @@ import {
 import { Command } from '@tauri-apps/plugin-shell';
 import { useAppStore } from '../../store/pathStore'; // Sesuaikan path file store Anda
 import { useSettingStore } from '../../store/settingStore';
-import { openLocation } from '../../utility';
+import { useDeployStore } from '../../store/deployStore';
+import { getNginxStatus, openLocation } from '../../utility';
 import { useAlert } from '../AlertProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
-import { gitCloneFe } from '../../utility/gitUtility';
+import DialogVersionInfo from '../DialogVersionInfo';
+import { gitCloneFe, gitVersionInfo } from '../../utility/gitUtility';
 import useGitAuth from '../../utility/useGitAuth';
 import { useConfirm } from '../ConfirmProvider';
 
@@ -66,7 +69,7 @@ const FRONTEND_CONFIG_FILE = 'MERTRACK-FRONTEND.conf';
 export default function TabNginx() {
   const { showAlert } = useAlert();
   const { confirm: showConfirm } = useConfirm();
-  const { nginxPath, setNginxPath } = useAppStore();
+  const { nginxPath, setNginxPath, deployInfo, setDeployInfo } = useAppStore();
   const [NGINX_CONF_DIR, setNGINX_CONF_DIR] = useState(
     `${nginxPath}\\conf\\sites-enabled`,
   );
@@ -74,10 +77,28 @@ export default function TabNginx() {
   const [gitForm, setGitForm] = useGitAuth();
   const [openGitDialog, setOpenGitDialog] = useState(false);
   const [selectedDeploy, setSelectedDeploy] = useState('');
-  const [openDeployDialog, setOpenDeployDialog] = useState(false);
-  const [deployLoading, setDeployLoading] = useState('');
   const [deletingConfig, setDeletingConfig] = useState('');
-  const [deployLogs, setDeployLogs] = useState([]);
+  const [versionInfo, setVersionInfo] = useState(null);
+
+  // Status Deployment Manager diambil dari store global supaya proses build
+  // yang sedang berjalan tetap terlihat walau dialog ditutup / pindah halaman.
+  const {
+    open: openDeployDialog,
+    setOpen: setOpenDeployDialog,
+    target: deployLoading,
+    start: startDeploy,
+    finish: finishDeploy,
+    logs: deployLogs,
+    appendLog,
+    clearLogs: clearDeployLogs,
+  } = useDeployStore();
+  const deployLogsRef = useRef(null);
+
+  // Auto-scroll Deployment Logs ke bawah setiap ada log baru
+  useEffect(() => {
+    const el = deployLogsRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [deployLogs]);
 
   const [nginxList, setNginxList] = useState([]);
 
@@ -106,12 +127,6 @@ export default function TabNginx() {
       appendLog(output.stderr);
     }
     return output;
-  };
-  const appendLog = (msg) => {
-    setDeployLogs((prev) => [
-      ...prev,
-      `[${new Date().toLocaleTimeString()}] ${msg}`,
-    ]);
   };
 
   // helper update/add env
@@ -282,8 +297,7 @@ export default function TabNginx() {
       return;
     }
 
-    setDeployLoading(type);
-    setDeployLogs([]);
+    startDeploy(type);
 
     try {
       // Self-heal: bila swap sebelumnya terputus di tengah jalan, backup
@@ -312,7 +326,11 @@ export default function TabNginx() {
       // =====================================================
       // CLONE REPOSITORY
       // =====================================================
-      appendLog('Cloning repository...');
+      appendLog(
+        `Cloning repository... branch: ${
+          setting.frontendBranch || 'default (branch utama repo)'
+        }`,
+      );
       let cloneResult;
       if (setting.frontendBranch) {
         cloneResult = await gitCloneFe({
@@ -325,6 +343,17 @@ export default function TabNginx() {
       }
       if (cloneResult.error) {
         throw new Error(cloneResult.message);
+      }
+      const version = await gitVersionInfo(frontendDir);
+      if (version.commit) {
+        appendLog(
+          `Branch ter-checkout: ${version.branch} • Last Version ${version.branch} (${version.commit.slice(0, 8)})`,
+        );
+        // Dicatat untuk tombol informasi versi di list NGINX.
+        setDeployInfo(`NGINX:${FRONTEND_CONFIG_FILE}`, {
+          ...version,
+          deployedAt: new Date().toLocaleString(),
+        });
       }
       // =====================================================
       // UPDATE FILE .ENV
@@ -420,7 +449,7 @@ export default function TabNginx() {
       showAlert(`${err}`, 'error');
       appendLog(`Deployment failed: ${err}`);
     } finally {
-      setDeployLoading('');
+      finishDeploy();
       appendLog('Done deployment process');
     }
   };
@@ -479,13 +508,38 @@ export default function TabNginx() {
 
     setDeletingConfig(item.fileName);
     try {
-      await remove(`${NGINX_CONF_DIR}\\${item.fileName}`);
-      if (!(await reloadNginx({ notifySuccess: false, notifyError: false }))) {
+      const confPath = `${NGINX_CONF_DIR}\\${item.fileName}`;
+      try {
+        await remove(confPath);
+      } catch (err) {
+        // File sudah hilang (mis. penghapusan sebelumnya berhenti di tengah
+        // jalan) → anggap terhapus, jangan sampai baris membandel di list.
+        if (await exists(confPath)) throw err;
+      }
+      if (await exists(confPath)) {
         throw new Error(
-          'Konfigurasi terhapus, tetapi Nginx gagal melakukan reload.',
+          `${item.fileName} masih ada di folder sites-enabled. Jalankan aplikasi sebagai Administrator lalu coba lagi.`,
         );
       }
+      // Sinkronkan list SEBELUM reload, supaya baris hilang meskipun
+      // penerapan ke Nginx di langkah berikutnya gagal.
       await fetchNginxList();
+
+      // Hapus juga dari Nginx yang sedang berjalan (reload konfigurasi).
+      let nginxNote = '';
+      if ((await getNginxStatus()) > 0) {
+        const reloaded = await reloadNginx({
+          notifySuccess: false,
+          notifyError: false,
+        });
+        if (!reloaded) {
+          nginxNote =
+            ' File config sudah terhapus, tapi Nginx gagal di-reload (umumnya karena aplikasi tidak berjalan sebagai Administrator) — restart Nginx agar perubahan terpakai.';
+        }
+      } else {
+        nginxNote =
+          ' Nginx tidak sedang berjalan, perubahan akan terpakai saat Nginx dimulai.';
+      }
 
       const canDeleteDeployment =
         item.fileName === FRONTEND_CONFIG_FILE &&
@@ -511,15 +565,25 @@ export default function TabNginx() {
       }
 
       showAlert(
-        shouldDeleteDeployment
-          ? 'Konfigurasi Nginx dan file frontend berhasil dihapus.'
-          : canDeleteDeployment
-            ? 'Konfigurasi Nginx berhasil dihapus. File frontend tetap dipertahankan.'
-            : 'Konfigurasi Nginx berhasil dihapus.',
-        'success',
+        `${
+          shouldDeleteDeployment
+            ? 'Konfigurasi Nginx dan file frontend berhasil dihapus.'
+            : canDeleteDeployment
+              ? 'Konfigurasi Nginx berhasil dihapus. File frontend tetap dipertahankan.'
+              : 'Konfigurasi Nginx berhasil dihapus.'
+        }${nginxNote}`,
+        nginxNote ? 'warning' : 'success',
       );
     } catch (err) {
-      showAlert(`${err}`, 'error');
+      const msg = `${err}`;
+      showAlert(
+        /access is denied|denied/i.test(msg)
+          ? `${msg} — jalankan aplikasi sebagai Administrator agar folder konfigurasi Nginx bisa dihapus.`
+          : msg,
+        'error',
+      );
+      // Daftar tetap disinkronkan agar tidak menampilkan baris hantu.
+      await fetchNginxList();
     } finally {
       setDeletingConfig('');
     }
@@ -708,13 +772,27 @@ export default function TabNginx() {
 
           <Box display="flex" alignItems="center" gap={1.5}>
             {/* Group Service Control */}
-            <Button
-              variant="contained"
-              startIcon={<RocketLaunch />}
-              onClick={() => setOpenDeployDialog(true)}
+            <Tooltip
+              title={
+                deployLoading !== ''
+                  ? 'Deployment sedang berjalan — klik untuk melihat progresnya'
+                  : ''
+              }
             >
-              Tambah / Update App
-            </Button>
+              <Button
+                variant="contained"
+                startIcon={
+                  deployLoading !== '' ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : (
+                    <RocketLaunch />
+                  )
+                }
+                onClick={() => setOpenDeployDialog(true)}
+              >
+                Tambah / Update App
+              </Button>
+            </Tooltip>
           </Box>
         </Box>
       </Box>
@@ -779,6 +857,19 @@ export default function TabNginx() {
                     {site.target || '-'}
                   </TableCell>
                   <TableCell align="center">
+                    <Tooltip title="Informasi Versi">
+                      <IconButton
+                        color="info"
+                        onClick={() =>
+                          setVersionInfo({
+                            title: site.name,
+                            info: deployInfo[`NGINX:${site.fileName}`] || null,
+                          })
+                        }
+                      >
+                        <Info />
+                      </IconButton>
+                    </Tooltip>
                     <IconButton
                       color="warning"
                       onClick={() => openFolder(site)}
@@ -857,11 +948,23 @@ export default function TabNginx() {
 
           <Divider sx={{ my: 2 }} />
 
-          <Typography variant="subtitle1" fontWeight="bold" mb={1}>
-            Deployment Logs
-          </Typography>
+          <Box display="flex" alignItems="center" gap={1} mb={1}>
+            <Typography variant="subtitle1" fontWeight="bold">
+              Deployment Logs
+            </Typography>
+            {deployLoading !== '' && (
+              <>
+                <CircularProgress size={14} />
+                <Typography variant="body2" color="text.secondary">
+                  deployment masih berjalan, silakan tutup dialog ini — proses
+                  tetap lanjut
+                </Typography>
+              </>
+            )}
+          </Box>
 
           <Paper
+            ref={deployLogsRef}
             variant="outlined"
             sx={{
               p: 2,
@@ -882,7 +985,7 @@ export default function TabNginx() {
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={() => setDeployLogs([])}>Clear</Button>
+          <Button onClick={clearDeployLogs}>Clear</Button>
           <Button onClick={() => setOpenDeployDialog(false)}>Close</Button>
         </DialogActions>
       </Dialog>
@@ -896,6 +999,12 @@ export default function TabNginx() {
           setOpenGitDialog(false);
           await handleDeploy(selectedDeploy, gitForm);
         }}
+      />
+      <DialogVersionInfo
+        open={Boolean(versionInfo)}
+        onClose={() => setVersionInfo(null)}
+        title={versionInfo?.title}
+        info={versionInfo?.info}
       />
     </Box>
   );

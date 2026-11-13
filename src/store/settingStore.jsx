@@ -13,6 +13,15 @@ export const useSettingStore = create(
           gitAuth: { ...state.gitAuth, ...data },
         })),
 
+      // Kunci integrasi Tailscale untuk menu Remote Connection. Sama seperti
+      // gitAuth, disimpan di luar `form` agar tidak ikut terhapus saat reset.
+      tailscaleAuth: { authKey: '', hostname: '', loginServer: '' },
+
+      setTailscaleAuth: (data) =>
+        set((state) => ({
+          tailscaleAuth: { ...state.tailscaleAuth, ...data },
+        })),
+
       form: {
         appName: 'API_CORE_MERTRACK',
         workingDirectory: '',

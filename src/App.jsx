@@ -7,6 +7,7 @@ import Footer from './component/layout/Footer';
 import Header from './component/layout/Header';
 import SideBar from './component/layout/SideBar';
 import HomeScreen from './screen/HomeScreen';
+import RemoteScreen from './screen/RemoteScreen';
 import SettingScreen from './screen/SettingScreen';
 import Splash from './screen/Splash';
 import { useAppStore } from './store/pathStore';
@@ -117,6 +118,7 @@ function App() {
             <ThemeProvider theme={compactTheme}>
               <Routes>
                 <Route path="/" element={<HomeScreen user={user} />} />
+                <Route path="/remote" element={<RemoteScreen />} />
                 <Route path="/setting" element={<SettingScreen />} />
               </Routes>
             </ThemeProvider>

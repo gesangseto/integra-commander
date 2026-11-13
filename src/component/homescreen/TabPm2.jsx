@@ -3,6 +3,7 @@ import {
   Autorenew,
   Delete,
   DeleteForever,
+  Info,
   Refresh,
   RocketLaunch,
   Stop,
@@ -36,13 +37,20 @@ import { useEffect, useRef, useState } from 'react';
 import Pm2LogViewer from '../Pm2LogViewer';
 
 import { useSettingStore } from '../../store/settingStore';
+import { useAppStore } from '../../store/pathStore';
 import { useAppStatusStore } from '../../store/appStatusStore';
+import { useDeployStore } from '../../store/deployStore';
 import { humanizeText, openLocation } from '../../utility';
-import { gitClone, gitValidation } from '../../utility/gitUtility';
+import {
+  gitClone,
+  gitValidation,
+  gitVersionInfo,
+} from '../../utility/gitUtility';
 import useGitAuth from '../../utility/useGitAuth';
 import { useAlert } from '../AlertProvider';
 import { useConfirm } from '../ConfirmProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
+import DialogVersionInfo from '../DialogVersionInfo';
 
 /**
  * Daftar aplikasi yang dapat di-deploy melalui tab PM2 Management.
@@ -109,10 +117,13 @@ export default function TabPm2() {
   const setting = useSettingStore((state) => state.form);
   const isAdmin = useAppStatusStore((state) => state.isAdmin);
   const setIsAdmin = useAppStatusStore((state) => state.setIsAdmin);
+  const deployInfo = useAppStore((state) => state.deployInfo);
+  const setDeployInfo = useAppStore((state) => state.setDeployInfo);
+
+  const [versionInfo, setVersionInfo] = useState(null);
 
   const [pm2List, setPm2List] = useState([]);
 
-  const [openDeployDialog, setOpenDeployDialog] = useState(false);
   const [openReloadDialog, setOpenReloadDialog] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
   const [pendingReload, setPendingReload] = useState(false);
@@ -121,8 +132,18 @@ export default function TabPm2() {
   const [openLogViewer, setOpenLogViewer] = useState(false);
   const [selectedProcess, setSelectedProcess] = useState(null);
 
-  const [deployLoading, setDeployLoading] = useState('');
-  const [deployLogs, setDeployLogs] = useState([]);
+  // Status Deployment Manager diambil dari store global supaya proses build
+  // yang sedang berjalan tetap terlihat walau dialog ditutup / pindah halaman.
+  const {
+    open: openDeployDialog,
+    setOpen: setOpenDeployDialog,
+    target: deployLoading,
+    start: startDeploy,
+    finish: finishDeploy,
+    logs: deployLogs,
+    appendLog,
+    clearLogs: clearDeployLogs,
+  } = useDeployStore();
   const deployLogsRef = useRef(null);
 
   // Auto-scroll Deployment Logs ke bawah setiap ada log baru
@@ -144,17 +165,6 @@ export default function TabPm2() {
     const interval = setInterval(fetchPm2List, 10000);
     return () => clearInterval(interval);
   }, [isAdmin]);
-
-  /**
-   * Menambahkan pesan log ke state `deployLogs` dengan timestamp lokal.
-   * @param {string} msg - Pesan yang akan ditambahkan ke log deployment.
-   */
-  const appendLog = (msg) => {
-    setDeployLogs((prev) => [
-      ...prev,
-      `[${new Date().toLocaleTimeString()}] ${msg}`,
-    ]);
-  };
 
   /**
    * Menjalankan perintah shell melalui plugin Tauri `run-command` dengan
@@ -482,10 +492,8 @@ export default function TabPm2() {
       // =====================================================
       // START DEPLOYMENT
       // =====================================================
-      // Menandai deploy sedang berjalan
-      setDeployLoading(type);
-      // Reset log deployment sebelumnya
-      setDeployLogs([]);
+      // Menandai deploy sedang berjalan + reset log deployment sebelumnya
+      startDeploy(type);
       // Tambahkan log awal
       appendLog('Starting deployment...');
 
@@ -542,7 +550,7 @@ export default function TabPm2() {
         ['/C', 'rmdir', '/S', '/Q', tempDir],
         setting.workingDirectory,
       ).catch(() => {});
-      setDeployLoading('');
+      finishDeploy();
       appendLog('Done deployment process');
     }
   };
@@ -657,14 +665,31 @@ export default function TabPm2() {
       // =====================================================
       // CLONE REPOSITORY
       // =====================================================
-      appendLog('Cloning repository...');
+      const requestedBranch =
+        key == 'API_CORE' ? setting.backendBranch || '' : '';
+      appendLog(
+        `Cloning repository... branch: ${
+          requestedBranch || 'default (branch utama repo)'
+        }`,
+      );
       let param = { ...options, ...gitForm, directory: tempDir };
-      if (key == 'API_CORE' && setting.backendBranch) {
-        param = { ...param, branch: setting.backendBranch };
+      if (requestedBranch) {
+        param = { ...param, branch: requestedBranch };
       }
       const cloneResult = await gitClone(param);
       if (cloneResult.error) {
         throw new Error(cloneResult.message);
+      }
+      const version = await gitVersionInfo(tempDir);
+      if (version.commit) {
+        appendLog(
+          `Branch ter-checkout: ${version.branch} • Last Version ${version.branch} (${version.commit.slice(0, 8)})`,
+        );
+        // Dicatat untuk tombol informasi versi di list PM2.
+        setDeployInfo(`PM2:${options.title}`, {
+          ...version,
+          deployedAt: new Date().toLocaleString(),
+        });
       }
 
       // =====================================================
@@ -852,13 +877,27 @@ export default function TabPm2() {
           >
             Save PM2
           </Button>
-          <Button
-            variant="contained"
-            startIcon={<RocketLaunch />}
-            onClick={() => setOpenDeployDialog(true)}
+          <Tooltip
+            title={
+              deployLoading !== ''
+                ? 'Deployment sedang berjalan — klik untuk melihat progresnya'
+                : ''
+            }
           >
-            Tambah / Update App
-          </Button>
+            <Button
+              variant="contained"
+              startIcon={
+                deployLoading !== '' ? (
+                  <CircularProgress size={18} color="inherit" />
+                ) : (
+                  <RocketLaunch />
+                )
+              }
+              onClick={() => setOpenDeployDialog(true)}
+            >
+              Tambah / Update App
+            </Button>
+          </Tooltip>
         </Box>
       </Box>
       <TableContainer
@@ -926,6 +965,19 @@ export default function TabPm2() {
                 <TableCell>{proc.monit.cpu} %</TableCell>
 
                 <TableCell align="center">
+                  <Tooltip title="Informasi Versi">
+                    <IconButton
+                      color="info"
+                      onClick={() =>
+                        setVersionInfo({
+                          title: proc.name,
+                          info: deployInfo[`PM2:${proc.name}`] || null,
+                        })
+                      }
+                    >
+                      <Info />
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title="Monitor CMD">
                     <IconButton
                       color="info"
@@ -1073,9 +1125,20 @@ export default function TabPm2() {
 
           <Divider sx={{ my: 2 }} />
 
-          <Typography variant="subtitle1" fontWeight="bold" mb={1}>
-            Deployment Logs
-          </Typography>
+          <Box display="flex" alignItems="center" gap={1} mb={1}>
+            <Typography variant="subtitle1" fontWeight="bold">
+              Deployment Logs
+            </Typography>
+            {deployLoading !== '' && (
+              <>
+                <CircularProgress size={14} />
+                <Typography variant="body2" color="text.secondary">
+                  deployment masih berjalan, silakan tutup dialog ini — proses
+                  tetap lanjut
+                </Typography>
+              </>
+            )}
+          </Box>
 
           <Paper
             ref={deployLogsRef}
@@ -1099,7 +1162,7 @@ export default function TabPm2() {
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={() => setDeployLogs([])}>Clear</Button>
+          <Button onClick={clearDeployLogs}>Clear</Button>
           <Button onClick={() => setOpenDeployDialog(false)}>Close</Button>
         </DialogActions>
       </Dialog>
@@ -1143,6 +1206,12 @@ export default function TabPm2() {
           setOpenGitDialog(false);
           await handleDeploy(selectedDeploy, gitForm);
         }}
+      />
+      <DialogVersionInfo
+        open={Boolean(versionInfo)}
+        onClose={() => setVersionInfo(null)}
+        title={versionInfo?.title}
+        info={versionInfo?.info}
       />
       <Backdrop
         open={isLoading}

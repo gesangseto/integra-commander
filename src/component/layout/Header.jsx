@@ -1,6 +1,13 @@
 import { PowerSettingsNew } from '@mui/icons-material';
 import { Circle } from '@mui/icons-material';
-import { Lock as LockIcon, LockOpen as LockOpenIcon } from '@mui/icons-material';
+import {
+  Lock as LockIcon,
+  LockOpen as LockOpenIcon,
+} from '@mui/icons-material';
+import {
+  Hub as TsRemoteIcon,
+  HubOutlined as TsRemoteOutlinedIcon,
+} from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -25,11 +32,17 @@ import mertrackLogo from '../../assets/mertrack.png';
 import { showGlobalAlert } from '../AlertProvider';
 import { useConfirm } from '../ConfirmProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
+import DialogTailscaleAuthentication from '../DialogTailscaleAuthentication';
 import { useAppStore } from '../../store/pathStore';
 import { useAppStatusStore } from '../../store/appStatusStore';
 import { useSettingStore } from '../../store/settingStore';
 import { gitValidation } from '../../utility/gitUtility';
 import useGitAuth from '../../utility/useGitAuth';
+import useTailscaleAuth from '../../utility/useTailscaleAuth';
+import {
+  normalizeHostname,
+  tailscaleValidation,
+} from '../../utility/tailscaleUtility';
 
 const blinkRed = keyframes`
   0% { background-color: #ff8383; }
@@ -86,6 +99,49 @@ function Header() {
     setGitAuth({ username: '', password: '' });
     setGitDialog(false);
     showGlobalAlert('Git authentication dihapus.', 'success');
+  };
+
+  // ===== TAILSCALE AUTHENTICATION (ikon hub, sebelah gembok Git) =====
+  const tailscaleAuth = useSettingStore((s) => s.tailscaleAuth);
+  const setTailscaleAuth = useSettingStore((s) => s.setTailscaleAuth);
+  const [tailscaleForm, setTailscaleForm] = useTailscaleAuth();
+  const [tailscaleDialog, setTailscaleDialog] = useState(false);
+  // Auth key boleh kosong (login browser), jadi hostname/server juga dihitung.
+  const hasTailscaleAuth = Boolean(
+    tailscaleAuth.authKey ||
+    tailscaleAuth.hostname ||
+    tailscaleAuth.loginServer,
+  );
+
+  const handleSaveTailscaleAuth = () => {
+    const validasi = tailscaleValidation(tailscaleForm);
+    if (validasi.error) {
+      showGlobalAlert(validasi.message, 'error');
+      return;
+    }
+    setTailscaleAuth({
+      authKey: tailscaleForm.authKey.trim(),
+      hostname: normalizeHostname(tailscaleForm.hostname),
+      loginServer: tailscaleForm.loginServer.trim(),
+    });
+    setTailscaleDialog(false);
+    showGlobalAlert(
+      'Kredensial Tailscale tersimpan. Buka menu Remote Connection untuk gabung ke tailnet.',
+      'success',
+    );
+  };
+
+  const handleDeleteTailscaleAuth = async () => {
+    const ok = await showConfirm({
+      title: 'Hapus Kredensial Tailscale',
+      message:
+        'Kredensial Tailscale yang tersimpan (auth key, hostname, login server) akan dihapus. PC yang sudah terlanjur gabung tetap terhubung sampai diputus dari menu Remote Connection. Lanjut?',
+      severity: 'danger',
+    });
+    if (!ok) return;
+    setTailscaleAuth({ authKey: '', hostname: '', loginServer: '' });
+    setTailscaleDialog(false);
+    showGlobalAlert('Kredensial Tailscale dihapus.', 'success');
   };
 
   useEffect(() => {
@@ -222,12 +278,7 @@ function Header() {
             overflow="visible"
           >
             {/* BAGIAN 1 - IMAGE INFO */}
-            <Box
-              flex={1}
-              display="flex"
-              alignItems="center"
-              overflow="visible"
-            >
+            <Box flex={1} display="flex" alignItems="center" overflow="visible">
               <img
                 src={mertrackLogo}
                 style={{ height: 48, width: 'auto' }}
@@ -325,7 +376,9 @@ function Header() {
                   sx={{
                     width: 34,
                     height: 34,
-                    border: hasGitAuth ? '1px solid #16a34a' : '1px dashed #94a3b8',
+                    border: hasGitAuth
+                      ? '1px solid #16a34a'
+                      : '1px dashed #94a3b8',
                     borderRadius: '10px',
                     color: hasGitAuth ? '#16a34a' : '#ff9100',
                     backgroundColor: hasGitAuth
@@ -347,6 +400,41 @@ function Header() {
                   )}
                 </IconButton>
               </Tooltip>
+              {/* <Tooltip
+                title={
+                  hasTailscaleAuth
+                    ? `TERSIMPAN — Kredensial Tailscale untuk bergabung sebagai "${tailscaleAuth.hostname || 'nama PC ini'}"${tailscaleAuth.loginServer ? ` ke server ${tailscaleAuth.loginServer}` : ''}${tailscaleAuth.authKey ? ' dengan auth key' : ' lewat login browser'}. Klik untuk memperbarui atau menghapus.`
+                    : 'BELUM TERSIMPAN — Klik untuk menyimpan nama/login server tailnet. Auth key opsional; tanpa auth key, Remote Connection login lewat browser.'
+                }
+              >
+                <IconButton
+                  size="small"
+                  onClick={() => setTailscaleDialog(true)}
+                  sx={{
+                    width: 34,
+                    height: 34,
+                    border: hasTailscaleAuth
+                      ? '1px solid #7c3aed'
+                      : '1px dashed #94a3b8',
+                    borderRadius: '10px',
+                    color: hasTailscaleAuth ? '#7c3aed' : '#ff9100',
+                    backgroundColor: hasTailscaleAuth
+                      ? 'rgba(124,58,237,0.12)'
+                      : 'transparent',
+                    '&:hover': {
+                      backgroundColor: hasTailscaleAuth
+                        ? 'rgba(124,58,237,0.2)'
+                        : 'rgba(255,145,0,0.08)',
+                    },
+                  }}
+                >
+                  {hasTailscaleAuth ? (
+                    <TsRemoteIcon fontSize="small" />
+                  ) : (
+                    <TsRemoteOutlinedIcon fontSize="small" />
+                  )}
+                </IconButton>
+              </Tooltip> */}
               <Button
                 variant="outlined"
                 size="small"
@@ -394,9 +482,9 @@ function Header() {
             '& .MuiAlert-message': { py: 0.4 },
           }}
         >
-          Aplikasi harus dijalankan sebagai <strong>Administrator</strong>. Tutup
-          lalu buka kembali dengan <strong>Run as administrator</strong> agar PM2
-          berfungsi (pemantauan PM2 dihentikan).
+          Aplikasi harus dijalankan sebagai <strong>Administrator</strong>.
+          Tutup lalu buka kembali dengan <strong>Run as administrator</strong>{' '}
+          agar PM2 berfungsi (pemantauan PM2 dihentikan).
         </Alert>
       )}
 
@@ -449,6 +537,17 @@ function Header() {
         submitLabel="Simpan"
         onDelete={hasGitAuth ? handleDeleteGitAuth : undefined}
         onSubmit={handleSaveGitAuth}
+      />
+
+      <DialogTailscaleAuthentication
+        open={tailscaleDialog}
+        onClose={() => setTailscaleDialog(false)}
+        tailscaleForm={tailscaleForm}
+        setTailscaleForm={setTailscaleForm}
+        title="Simpan Kredensial Tailscale"
+        submitLabel="Simpan"
+        onDelete={hasTailscaleAuth ? handleDeleteTailscaleAuth : undefined}
+        onSubmit={handleSaveTailscaleAuth}
       />
     </Paper>
   );

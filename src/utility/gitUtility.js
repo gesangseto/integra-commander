@@ -16,6 +16,36 @@ function makeGitUrl(url, { username, password }) {
   );
 }
 
+// Branch + commit terakhir yang benar-benar ter-checkout di hasil clone.
+// Kalau Settings tidak mengisi branch, `branch` berisi branch default repo.
+// Gagal membaca (mis. folder bukan repo) menghasilkan nilai kosong, tanpa
+// membatalkan proses yang sedang berjalan.
+export async function gitVersionInfo(directory) {
+  const empty = { branch: '', commit: '', message: '' };
+  try {
+    const branch = await runCommand(
+      ['/C', 'git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+      directory,
+    );
+    // %x1f = pemisah Unit Separator, aman untuk pesan commit apa pun.
+    const last = await runCommand(
+      ['/C', 'git', 'log', '-1', '--pretty=format:%H%x1f%s%x1f%B'],
+      directory,
+    );
+    const [commit = '', subject = '', body = ''] = (last.stdout || '')
+      .trim()
+      .split('\x1f');
+
+    return {
+      branch: (branch.stdout || '').trim(),
+      commit,
+      message: (body || subject).trim(),
+    };
+  } catch {
+    return empty;
+  }
+}
+
 export async function gitValidation(options) {
   try {
     const url = makeGitUrl(url_be, options);
