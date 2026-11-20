@@ -117,16 +117,39 @@ export default function TabNginx() {
     }
   }, [nginxPath]);
 
-  const runCommand = async (args, cwd) => {
+  const runCommand = async (args, cwd, { logStdout = true } = {}) => {
     appendLog(args.join(' '));
     const cmd = Command.create('run-command', args, {
       cwd,
     });
-    const output = await cmd.execute();
-    if (output.stderr) {
-      appendLog(output.stderr);
-    }
-    return output;
+    return new Promise((resolve, reject) => {
+      let stdout = '';
+      let stderr = '';
+      let settled = false;
+      const settle = (fn, val) => {
+        if (settled) return;
+        settled = true;
+        fn(val);
+      };
+      // Stream output real-time ke Deployment Logs
+      cmd.stdout.on('data', (line) => {
+        stdout += line;
+        if (logStdout && line) appendLog(line.trim());
+      });
+      cmd.stderr.on('data', (line) => {
+        stderr += line;
+        if (line) appendLog(line.trim());
+      });
+      cmd.on('error', (error) => settle(reject, new Error(error)));
+      cmd.on('close', (data) => {
+        if (data.code !== 0) {
+          settle(reject, new Error(stderr || `Command failed (${data.code})`));
+        } else {
+          settle(resolve, { code: data.code, stdout, stderr });
+        }
+      });
+      cmd.spawn().catch((err) => settle(reject, new Error(err)));
+    });
   };
 
   // helper update/add env
