@@ -18,6 +18,7 @@ import { DashboardOutlined } from '@mui/icons-material';
 let menu = [
   { id: 0, name: 'Dashboard', route: '/' },
   { id: 1, name: 'Setting', route: '/setting' },
+  { id: 2, name: 'Telemetry', route: '/telemetry' },
   // { id: 2, name: 'Remote Connection', route: '/remote' },
 ];
 
@@ -116,15 +117,15 @@ export default function SideBar() {
             <DashboardOutlined fontSize="medium" />
           </Button>
         </Tooltip>
-        {/* <Tooltip title="Remote Connection">
+        <Tooltip title="Telemetry">
           <Button
-            aria-label="Remote Connection"
+            aria-label="Telemetry"
             sx={navButtonSx(activeMenu === 2)}
             onClick={() => handleClickMenu(2)}
           >
             <HubIcon fontSize="medium" />
           </Button>
-        </Tooltip> */}
+        </Tooltip>
       </Stack>
 
       <Stack spacing={1} mt="auto" alignItems="center">

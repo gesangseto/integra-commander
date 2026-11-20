@@ -9,6 +9,7 @@ import SideBar from './component/layout/SideBar';
 import HomeScreen from './screen/HomeScreen';
 import RemoteScreen from './screen/RemoteScreen';
 import SettingScreen from './screen/SettingScreen';
+import TelemetryScreen from './screen/TelemetryScreen';
 import Splash from './screen/Splash';
 import { useAppStore } from './store/pathStore';
 import { useAppStatusStore } from './store/appStatusStore';
@@ -118,6 +119,7 @@ function App() {
             <ThemeProvider theme={compactTheme}>
               <Routes>
                 <Route path="/" element={<HomeScreen user={user} />} />
+                <Route path="/telemetry" element={<TelemetryScreen />} />
                 <Route path="/remote" element={<RemoteScreen />} />
                 <Route path="/setting" element={<SettingScreen />} />
               </Routes>

@@ -31,9 +31,14 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
+import {
+  exists,
+  mkdir,
+  readTextFile,
+  writeTextFile,
+} from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import Pm2LogViewer from '../Pm2LogViewer';
 
 import { useSettingStore } from '../../store/settingStore';
@@ -56,32 +61,58 @@ import DialogVersionInfo from '../DialogVersionInfo';
  * Daftar aplikasi yang dapat di-deploy melalui tab PM2 Management.
  *
  * @constant
- * @type {Array<{key: string, title: string, description: string, git_url: string|null}>}
+ * @type {Array<{key: string, title: string, description: string, git_url: string|null, group?: string}>}
  * @property {string} key          - Identifikasi unik jenis deployment (dipakai sebagai `type` di handleDeploy).
  * @property {string} title        - Judul yang ditampilkan di UI.
  * @property {string} description  - Deskripsi singkat untuk UI.
  * @property {string|null} git_url - URL repository Git. `null` untuk jenis yang tidak butuh clone (mis. logrotate).
+ * @property {string} [group]      - Grup tampilan di dialog Deployment Manager (mis. 'Plugin').
  */
 const DEPLOY_APPS = [
   {
     key: 'API_CORE',
-    title: 'Update Api Core Mertrack',
+    title: 'Api Core Mertrack',
     description: 'Pull latest source & reload PM2',
     git_url: 'https://gitlab.com/mertrack/mertrack-core',
+    group: 'Service',
   },
   {
     key: 'API_BPOM',
-    title: 'Install / Update BPOM API',
+    title: 'Connector BPOM',
     description: 'Deploy BPOM API service',
     git_url: 'https://gitlab.com/gesang/connector-bpom',
+    group: 'Service',
+  },
+  {
+    key: 'telemetry',
+    title: 'Telemetry',
+    description: 'Clone, build & jalankan otel-gui (OpenTelemetry viewer)',
+    git_url: 'https://github.com/metafab/otel-gui',
+    group: 'Plugin',
   },
   {
     key: 'logrotate',
-    title: 'Install Logrotate',
+    title: 'Logrotate',
     description: 'Setup PM2 log rotation',
     git_url: null,
+    group: 'Plugin',
   },
 ];
+
+// Repository publik otel-gui + konfigurasi deployment Telemetry.
+const TELEMETRY_REPO = 'https://github.com/metafab/otel-gui';
+// Relatif terhadap working directory, mis. <workingDirectory>\plugin\otel-gui
+const TELEMETRY_DIR_PATH = 'plugin\\otel-gui';
+// File layout otel-gui yang header bawaannya dihapus sebelum build.
+const TELEMETRY_LAYOUT_FILE = 'src\\routes\\+layout.svelte';
+const TELEMETRY_LAYOUT_GIT_PATH = 'src/routes/+layout.svelte';
+// Blok <header class="app-header">...</header> (termasuk indentasi & newline).
+const TELEMETRY_HEADER_REGEX =
+  /[ \t]*<header class="app-header">[\s\S]*?<\/header>[ \t]*\r?\n?/;
+const TELEMETRY_PM2_NAME = 'telemetry';
+const TELEMETRY_PORT = 4318;
+// Versi Node.js minimum yang didukung otel-gui (package.json -> engines).
+const TELEMETRY_MIN_NODE = { major: 22, minor: 17 };
 
 /**
  * Komponen utama untuk manajemen proses PM2.
@@ -90,8 +121,8 @@ const DEPLOY_APPS = [
  * - Tabel daftar proses PM2 (auto-refresh tiap 10 detik)
  * - Aksi per proses: monitor log, stop, restart, delete
  * - Tombol "Reload .env": perbarui file .env lalu reload semua proses PM2
- * - Dialog deployment untuk API_CORE, API_BPOM, dan logrotate
- * - Dialog autentikasi Git sebelum clone repository
+ * - Dialog deployment untuk API_CORE, API_BPOM, telemetry, dan logrotate
+ * - Dialog autentikasi Git sebelum clone repository privat (API_CORE / API_BPOM)
  *
  * Alur deployment (API_CORE / API_BPOM):
  *   1. Bersihkan folder temp
@@ -413,7 +444,9 @@ export default function TabPm2() {
     try {
       await updateFileEnv(serviceDir);
 
-      const targets = pm2List.filter((proc) => proc.name !== 'pm2-logrotate');
+      const targets = pm2List.filter(
+        (proc) => proc.name !== 'pm2-logrotate' && proc.name !== 'telemetry',
+      );
 
       if (targets.length === 0) {
         showAlert('Tidak ada proses PM2 untuk di-reload', 'warning');
@@ -479,7 +512,7 @@ export default function TabPm2() {
    * hasil build hanya di-overwrite di atas isi folder yang sudah ada
    * (file seperti `.env` dan `node_modules` yang sudah ada tetap dipertahankan).
    *
-   * @param {string} type - Kunci deployment dari `DEPLOY_APPS` ('API_CORE' | 'API_BPOM' | 'logrotate').
+   * @param {string} type - Kunci deployment dari `DEPLOY_APPS` ('API_CORE' | 'API_BPOM' | 'telemetry' | 'logrotate').
    * @returns {Promise<void>}
    */
   const handleDeploy = async (type) => {
@@ -514,10 +547,15 @@ export default function TabPm2() {
         deploy_info.port = setting.bpomAppPort;
       }
       // =====================================================
-      // JIKA logrotate CUKUP SAMPAI SINI
+      // JIKA logrotate / telemetry CUKUP SAMPAI SINI
       // =====================================================
       if (deploy_info.key === 'logrotate') {
         return await deployLogRotate();
+      }
+      if (deploy_info.key === 'telemetry') {
+        await deployTelemetry();
+        showAlert('Telemetry installed', 'success');
+        return;
       }
 
       // =====================================================
@@ -563,6 +601,226 @@ export default function TabPm2() {
     await runCommand(['/C', 'pm2', 'install', 'pm2-logrotate'], 'C:\\');
     appendLog('Logrotate installed');
     return;
+  };
+
+  /**
+   * Men-deploy otel-gui (OpenTelemetry viewer) sebagai proses PM2 `telemetry`.
+   *
+   * Alur:
+   * 1. Cek versi Node.js (otel-gui butuh Node >= 22.17).
+   * 2. Clone repo otel-gui, atau tarik update bila folder sudah ada.
+   * 3. Hentikan proses PM2 `telemetry` (bila ada) agar file build tidak terkunci.
+   * 4. `npm install`, hapus header bawaan otel-gui, lalu `npm run build`.
+   * 5. Start PM2 `telemetry` dari `build/index.js` lalu verifikasi status `online`.
+   *
+   * Folder instalasi: `<workingDirectory>\plugin\otel-gui` — berisi source,
+   * node_modules, `build`, dan `proto` (proto dibutuhkan otel-gui saat runtime).
+   *
+   * @returns {Promise<void>}
+   * @throws {Error} Jika working directory belum diatur, Node.js terlalu lama,
+   *   atau clone/install/build gagal.
+   */
+  const deployTelemetry = async () => {
+    if (!setting.workingDirectory) {
+      throw new Error(
+        'Working directory belum diatur. Buka menu Setting terlebih dahulu.',
+      );
+    }
+
+    const telemetryDir = `${setting.workingDirectory}\\${TELEMETRY_DIR_PATH}`;
+
+    // =====================================================
+    // CEK VERSI NODE
+    // =====================================================
+    appendLog('Checking Node.js version...');
+    let nodeOut;
+    try {
+      nodeOut = await runCommand(
+        ['/C', 'node', '-v'],
+        setting.workingDirectory,
+        { logStdout: false },
+      );
+    } catch {
+      throw new Error(
+        'Node.js tidak ditemukan. Pastikan Node.js >= 22.17 sudah terpasang dan ada di PATH.',
+      );
+    }
+    const nodeVersion = nodeOut.stdout.trim().replace(/^v/i, '');
+    const [nodeMajor = 0, nodeMinor = 0] = nodeVersion.split('.').map(Number);
+    if (
+      nodeMajor < TELEMETRY_MIN_NODE.major ||
+      (nodeMajor === TELEMETRY_MIN_NODE.major &&
+        nodeMinor < TELEMETRY_MIN_NODE.minor)
+    ) {
+      throw new Error(
+        `Telemetry membutuhkan Node.js >= ${TELEMETRY_MIN_NODE.major}.${TELEMETRY_MIN_NODE.minor} (terpasang: ${
+          nodeVersion || 'tidak diketahui'
+        }).`,
+      );
+    }
+    appendLog(`Node.js ${nodeVersion} OK`);
+
+    // =====================================================
+    // CLONE ATAU UPDATE SOURCE
+    // =====================================================
+    let needClone = !(await exists(telemetryDir));
+    if (!needClone) {
+      appendLog('Updating otel-gui source...');
+      try {
+        // File layout sengaja dimodifikasi (header dihapus) pada build
+        // sebelumnya. Kembalikan dulu agar `git pull --ff-only` tidak gagal
+        // karena perubahan lokal.
+        await runCommand(
+          ['/C', 'git', 'checkout', '--', TELEMETRY_LAYOUT_GIT_PATH],
+          telemetryDir,
+        ).catch(() => {});
+        // `--ff-only` agar update tidak pernah membuat merge commit dan
+        // tidak menimpa perubahan lokal secara diam-diam.
+        await runCommand(['/C', 'git', 'pull', '--ff-only'], telemetryDir);
+      } catch {
+        // Bedakan folder kosong/bukan repo (aman di-clone ulang) dengan
+        // repo yang punya perubahan lokal / divergen (jangan dihapus).
+        let isGitRepo = true;
+        try {
+          await runCommand(
+            ['/C', 'git', 'rev-parse', '--is-inside-work-tree'],
+            telemetryDir,
+            { logStdout: false },
+          );
+        } catch {
+          isGitRepo = false;
+        }
+        if (isGitRepo) {
+          throw new Error(
+            'Gagal memperbarui otel-gui (git pull --ff-only). Periksa perubahan lokal di folder plugin\\otel-gui lalu coba lagi.',
+          );
+        }
+        appendLog(
+          'Folder plugin\\otel-gui bukan repository git valid, clone ulang...',
+        );
+        await runCommand(
+          ['/C', 'rmdir', '/S', '/Q', telemetryDir],
+          setting.workingDirectory,
+        ).catch(() => {});
+        needClone = true;
+      }
+    }
+    if (needClone) {
+      appendLog('Cloning otel-gui...');
+      // Pastikan folder induk `<workingDirectory>\plugin` tersedia sebelum clone.
+      await mkdir(`${setting.workingDirectory}\\plugin`, {
+        recursive: true,
+      }).catch(() => {});
+      await runCommand(
+        ['/C', 'git', 'clone', '--depth', '1', TELEMETRY_REPO, telemetryDir],
+        setting.workingDirectory,
+      );
+    }
+    const version = await gitVersionInfo(telemetryDir);
+    if (version.commit) {
+      appendLog(
+        `Telemetry version: ${version.branch} (${version.commit.slice(0, 8)})`,
+      );
+      setDeployInfo(`PM2:${TELEMETRY_PM2_NAME}`, {
+        ...version,
+        deployedAt: new Date().toLocaleString(),
+      });
+    }
+
+    // =====================================================
+    // HENTIKAN PROSES LAMA (BILA ADA) SEBELUM INSTALL/BUILD
+    // =====================================================
+    // Dilakukan setelah source siap supaya service lama tetap hidup bila
+    // update source gagal. File build/node_modules tidak boleh terkunci
+    // saat npm install & build berjalan di Windows.
+    appendLog('Stopping telemetry process (if any)...');
+    await Command.create(
+      'run-command',
+      ['/C', 'pm2', 'stop', TELEMETRY_PM2_NAME],
+      { cwd: setting.workingDirectory },
+    )
+      .execute()
+      .catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // =====================================================
+    // INSTALL DEPENDENCIES & BUILD
+    // =====================================================
+    appendLog('Installing telemetry dependencies...');
+    await runCommand(
+      ['/C', 'npm', 'install', '--no-audit', '--no-fund'],
+      telemetryDir,
+    );
+    appendLog('Building telemetry...');
+    // Hapus header bawaan otel-gui sebelum build (cukup di source hasil
+    // clone/update, tidak memengaruhi repo aslinya).
+    try {
+      const layoutPath = `${telemetryDir}\\${TELEMETRY_LAYOUT_FILE}`;
+      const layout = await readTextFile(layoutPath);
+      const patchedLayout = layout.replace(TELEMETRY_HEADER_REGEX, '');
+      if (patchedLayout === layout) {
+        appendLog('Header otel-gui tidak ditemukan, patch dilewati.');
+      } else {
+        await writeTextFile(layoutPath, patchedLayout);
+        appendLog('Header otel-gui dihapus sebelum build.');
+      }
+    } catch (err) {
+      appendLog(`Patch header otel-gui dilewati: ${err}`);
+    }
+    await runCommand(['/C', 'npm', 'run', 'build'], telemetryDir);
+
+    // =====================================================
+    // START PM2
+    // =====================================================
+    appendLog('Starting telemetry service...');
+    await Command.create(
+      'run-command',
+      ['/C', 'pm2', 'delete', TELEMETRY_PM2_NAME],
+      { cwd: setting.workingDirectory },
+    )
+      .execute()
+      .catch(() => {});
+    await runCommand(
+      ['/C', 'pm2', 'start', 'build/index.js', '--name', TELEMETRY_PM2_NAME],
+      telemetryDir,
+    );
+    await Command.create('run-command', ['/C', 'pm2', 'save', '--force'], {
+      cwd: setting.workingDirectory,
+    })
+      .execute()
+      .catch(() => {});
+
+    // =====================================================
+    // VERIFIKASI STATUS PM2
+    // =====================================================
+    // Beri waktu proses boot, lalu pastikan PM2 benar-benar `online`.
+    appendLog('Verifying telemetry process...');
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    let pm2Status = '';
+    try {
+      const jlist = await Command.create(
+        'run-command',
+        ['/C', 'pm2', 'jlist'],
+        { cwd: setting.workingDirectory },
+      ).execute();
+      const proc = JSON.parse(jlist.stdout).find(
+        (item) => item.name === TELEMETRY_PM2_NAME,
+      );
+      pm2Status = proc?.pm2_env?.status || 'not found';
+    } catch {
+      appendLog('Tidak dapat membaca status PM2 (output bukan JSON).');
+    }
+    if (pm2Status) {
+      appendLog(`Telemetry PM2 status: ${pm2Status}`);
+      if (pm2Status !== 'online') {
+        throw new Error(
+          `Telemetry gagal berjalan di PM2 (status: ${pm2Status}). Cek log proses telemetry.`,
+        );
+      }
+    }
+
+    appendLog(`Telemetry running at http://localhost:${TELEMETRY_PORT}`);
+    fetchPm2List();
   };
 
   /**
@@ -1081,46 +1339,77 @@ export default function TabPm2() {
 
         <DialogContent>
           <Grid container spacing={2}>
-            {DEPLOY_APPS.map((app) => (
-              <Grid size={{ xs: 12, md: 6 }} key={app.key}>
-                <Paper
-                  variant="outlined"
-                  sx={{
-                    p: 1.5,
-                    borderRadius: 2,
-                    minWidth: 320,
-                  }}
-                >
-                  <Typography variant="h6" fontWeight="bold">
-                    {app.title}
-                  </Typography>
+            {DEPLOY_APPS.map((app, index) => {
+              // Divider grup (mis. "Plugin") ditampilkan sekali di awal grup.
+              const showGroupDivider =
+                app.group && DEPLOY_APPS[index - 1]?.group !== app.group;
+              return (
+                <Fragment key={app.key}>
+                  {showGroupDivider && (
+                    <Grid size={{ xs: 12 }}>
+                      <Divider textAlign="left" sx={{ mt: 1 }}>
+                        <Typography
+                          variant="overline"
+                          color="text.secondary"
+                          sx={{ letterSpacing: 1.5, fontWeight: 'bold' }}
+                        >
+                          {app.group}
+                        </Typography>
+                      </Divider>
+                    </Grid>
+                  )}
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <Paper
+                      variant="outlined"
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 2,
+                        minWidth: 320,
+                      }}
+                    >
+                      <Typography variant="h6" fontWeight="bold">
+                        {app.title}
+                      </Typography>
 
-                  <Typography variant="body2" color="text.secondary" mt={1}>
-                    {app.description}
-                  </Typography>
+                      <Typography variant="body2" color="text.secondary" mt={1}>
+                        {app.description}
+                      </Typography>
 
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    startIcon={
-                      deployLoading === app.key ? (
-                        <CircularProgress size={20} />
-                      ) : (
-                        <RocketLaunch />
-                      )
-                    }
-                    sx={{ mt: 3 }}
-                    disabled={deployLoading !== ''}
-                    onClick={() => {
-                      setSelectedDeploy(app.key);
-                      setOpenGitDialog(true);
-                    }}
-                  >
-                    {deployLoading === app.key ? 'Processing...' : 'Execute'}
-                  </Button>
-                </Paper>
-              </Grid>
-            ))}
+                      <Button
+                        fullWidth
+                        variant="contained"
+                        startIcon={
+                          deployLoading === app.key ? (
+                            <CircularProgress size={20} />
+                          ) : (
+                            <RocketLaunch />
+                          )
+                        }
+                        sx={{ mt: 3 }}
+                        disabled={deployLoading !== ''}
+                        onClick={() => {
+                          // API_CORE & API_BPOM butuh kredensial Git privat.
+                          // Plugin (telemetry/logrotate) langsung dieksekusi.
+                          if (
+                            app.key === 'API_CORE' ||
+                            app.key === 'API_BPOM'
+                          ) {
+                            setSelectedDeploy(app.key);
+                            setOpenGitDialog(true);
+                          } else {
+                            handleDeploy(app.key);
+                          }
+                        }}
+                      >
+                        {deployLoading === app.key
+                          ? 'Processing...'
+                          : 'Execute'}
+                      </Button>
+                    </Paper>
+                  </Grid>
+                </Fragment>
+              );
+            })}
           </Grid>
 
           <Divider sx={{ my: 2 }} />
