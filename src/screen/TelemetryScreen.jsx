@@ -1,4 +1,4 @@
-import { OpenInNew, Refresh } from '@mui/icons-material';
+import { Refresh } from '@mui/icons-material';
 import {
   Box,
   Button,
@@ -9,23 +9,22 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { Command } from '@tauri-apps/plugin-shell';
 import { useCallback, useEffect, useState } from 'react';
 
-/**
- * URL UI otel-gui. Service ini dipasang lewat
- * PM2 Management → Deployment Manager → Plugin → Install Telemetry
- * dan berjalan sebagai proses PM2 `telemetry`.
- */
-const TELEMETRY_URL = 'http://localhost:4318';
-const TELEMETRY_HEALTH_URL = `${TELEMETRY_URL}/api/config`;
+import { useSettingStore } from '../store/settingStore';
+import { resolveTelemetryUrl } from '../utility/telemetryUtility';
 
 /**
  * Halaman Telemetry: menampilkan UI otel-gui di dalam webview (iframe).
  *
- * Karena service berjalan terpisah di port 4318, halaman ini mengecek
- * ketersediaannya lebih dulu agar bisa menampilkan panduan bila service
- * belum terpasang / sedang mati.
+ * Endpoint diambil dari Setting → Telemetry → `OTEL Exporter OTLP Endpoint`,
+ * sehingga otel-gui bisa diarahkan ke IP/endpoint server (bukan hanya
+ * `localhost`). Service-nya sendiri dipasang lewat
+ * PM2 Management → Deployment Manager → Plugin → Telemetry, dan berjalan
+ * sebagai proses PM2 `telemetry` dengan `PORT` sesuai endpoint tersebut.
+ *
+ * Halaman ini mengecek ketersediaan service lebih dulu agar bisa
+ * menampilkan panduan bila service belum terpasang / sedang mati.
  *
  * @component
  * @returns {JSX.Element} Halaman Telemetry
@@ -36,11 +35,18 @@ export default function TelemetryScreen() {
   // Dipakai untuk memaksa iframe reload.
   const [reloadKey, setReloadKey] = useState(0);
 
+  const endpoint = useSettingStore(
+    (state) => state.form.otelExporterOtlpEndpoint,
+  );
+  // Origin otel-gui mengikuti endpoint OTLP pada Setting.
+  const telemetryUrl = resolveTelemetryUrl(endpoint);
+  const healthUrl = `${telemetryUrl}/api/config`;
+
   const checkStatus = useCallback(async () => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3000);
     try {
-      const res = await fetch(TELEMETRY_HEALTH_URL, {
+      const res = await fetch(healthUrl, {
         signal: controller.signal,
         cache: 'no-store',
       });
@@ -50,7 +56,7 @@ export default function TelemetryScreen() {
     } finally {
       clearTimeout(timer);
     }
-  }, []);
+  }, [healthUrl]);
 
   useEffect(() => {
     checkStatus();
@@ -63,11 +69,6 @@ export default function TelemetryScreen() {
   const handleReload = () => {
     setReloadKey((key) => key + 1);
     checkStatus();
-  };
-
-  const handleOpenBrowser = () => {
-    // `start` membuka URL di browser default tanpa perlu izin plugin baru.
-    Command.create('run-command', ['/C', 'start', TELEMETRY_URL]).execute();
   };
 
   return (
@@ -110,22 +111,10 @@ export default function TelemetryScreen() {
           />
         )}
 
-        <Typography variant="caption" color="text.secondary">
-          {TELEMETRY_URL}
-        </Typography>
-
         <Box sx={{ flex: 1 }} />
 
         <Button size="small" startIcon={<Refresh />} onClick={handleReload}>
           Reload
-        </Button>
-        <Button
-          size="small"
-          startIcon={<OpenInNew />}
-          onClick={handleOpenBrowser}
-          disabled={status !== 'online'}
-        >
-          Buka di Browser
         </Button>
       </Stack>
 
@@ -137,7 +126,7 @@ export default function TelemetryScreen() {
             component="iframe"
             key={reloadKey}
             title="otel-gui"
-            src={TELEMETRY_URL}
+            src={telemetryUrl}
             sx={{
               display: 'block',
               width: '100%',
@@ -156,7 +145,7 @@ export default function TelemetryScreen() {
           >
             <CircularProgress />
             <Typography variant="body2" color="text.secondary">
-              Menghubungkan ke {TELEMETRY_URL}...
+              Menghubungkan ke {telemetryUrl}...
             </Typography>
           </Stack>
         ) : (
@@ -170,10 +159,9 @@ export default function TelemetryScreen() {
               Telemetry belum berjalan
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Service tidak merespons di {TELEMETRY_URL}. Pasang terlebih dahulu
-              lewat{' '}
+              Service tidak merespons di {telemetryUrl}. Pasang / update lewat{' '}
               <strong>
-                PM2 Management → Deployment Manager → Plugin → Install Telemetry
+                PM2 Management → Deployment Manager → Plugin → Telemetry
               </strong>
               , lalu klik Retry.
             </Typography>
@@ -184,9 +172,6 @@ export default function TelemetryScreen() {
                 onClick={handleReload}
               >
                 Retry
-              </Button>
-              <Button startIcon={<OpenInNew />} onClick={handleOpenBrowser}>
-                Buka di Browser
               </Button>
             </Stack>
           </Stack>

@@ -97,6 +97,12 @@ update_env_backend() {
     update_or_append "BPOM_PASSWORD" "$BPOM_PASSWORD"
     update_or_append "CONNECTOR_BPOM" "$CONNECTOR_BPOM"
     update_or_append "CONNECTOR_BPOM_NAME" "$CONNECTOR_BPOM_NAME"
+    # Telemetry / OpenTelemetry (default sama dengan SettingScreen Windows).
+    update_or_append "TELEMETRY_ENABLED" "${TELEMETRY_ENABLED:-true}"
+    update_or_append "OTEL_SERVICE_NAME" "${OTEL_SERVICE_NAME:-mertrack-api}"
+    update_or_append "OTEL_SERVICE_VERSION" "${OTEL_SERVICE_VERSION:-4.3.1}"
+    update_or_append "OTEL_EXPORTER_OTLP_ENDPOINT" "${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
+    update_or_append "OTEL_METRIC_EXPORT_INTERVAL" "${OTEL_METRIC_EXPORT_INTERVAL:-60000}"
     update_or_append "DB_HOST" "127.0.0.1"
     update_or_append "NODE_ENV" "$APP_MODE"
     update_or_append "IP_MERTRACK_BE" "$IP_MERTRACK_BE"

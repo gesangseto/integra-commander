@@ -11,6 +11,7 @@ import {
   MenuItem,
   Switch,
   FormControlLabel,
+  CircularProgress,
 } from '@mui/material';
 
 import DialogGitAuthentication from '../component/DialogGitAuthentication';
@@ -226,6 +227,35 @@ function SettingScreen() {
     resetStore(); // reset store sebelum menyimpan
     setForm(form); // simpan ke zustand
     showAlert('Saved successfully', 'success');
+  };
+
+  // Simpan perubahan HARUS melalui autentikasi Git: kredensial divalidasi
+  // (git ls-remote) lebih dulu. Bila belum ada / tidak valid, buka dialog
+  // Git agar user mengisi lalu menyimpan.
+  const handleSaveWithGit = async () => {
+    const ok = await showConfirm({
+      title: 'Save Settings',
+      message: 'Apakah anda yakin ingin menyimpan perubahan?',
+      severity: 'danger',
+    });
+    if (!ok) return;
+
+    // Belum ada kredensial tersimpan → minta lewat dialog Git.
+    if (!hasGitAuth) {
+      setOpenGitDialog(true);
+      return;
+    }
+
+    // Validasi kredensial Git yang tersimpan sebelum menyimpan perubahan.
+    setIsLoading(true);
+    const validasi = await gitValidation(gitAuth);
+    setIsLoading(false);
+    if (validasi.error) {
+      showAlert(validasi.message, 'error');
+      setOpenGitDialog(true);
+      return;
+    }
+    handleSave();
   };
 
   // ================= RESET =================
@@ -530,6 +560,90 @@ function SettingScreen() {
       </Box>
 
       {/* ========================================================= */}
+      {/* ================= TELEMETRY (OPENTELEMETRY) ============= */}
+      {/* ========================================================= */}
+      <Divider sx={{ mt: 2 }} />
+      <Box mt={1.5}>
+        <Typography variant="h6" fontWeight="bold" mb={1.5}>
+          Telemetry
+        </Typography>
+
+        <Box>
+          <Grid container spacing={1.5}>
+            <Grid size={6} sx={{ display: 'flex', alignItems: 'center' }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={form.telemetryEnabled === 'true'}
+                    onChange={(e) =>
+                      handleChange(
+                        'telemetryEnabled',
+                        e.target.checked ? 'true' : 'false',
+                      )
+                    }
+                    color="primary"
+                    inputProps={{ 'aria-label': 'telemetry switch' }}
+                  />
+                }
+                label="Enabled"
+              />
+            </Grid>
+            <Grid size={6}></Grid>
+            <Grid size={6}>
+              <TextField
+                size="small"
+                fullWidth
+                label="OTEL Service Name"
+                value={form.otelServiceName || ''}
+                helperText="Tidak boleh menggunakan spasi"
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\s/g, '');
+                  handleChange('otelServiceName', value);
+                }}
+              />
+            </Grid>
+            <Grid size={6}>
+              <TextField
+                size="small"
+                fullWidth
+                label="Service Version"
+                value={form.otelServiceVersion || ''}
+                onChange={(e) =>
+                  handleChange('otelServiceVersion', e.target.value)
+                }
+              />
+            </Grid>
+            <Grid size={6}>
+              <TextField
+                size="small"
+                fullWidth
+                label="Metric Export Interval (ms)"
+                value={form.otelMetricExportInterval || ''}
+                helperText="Hanya angka"
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  handleChange('otelMetricExportInterval', value);
+                }}
+              />
+            </Grid>
+            <Grid size={6}>
+              <TextField
+                size="small"
+                fullWidth
+                label="OTEL Exporter OTLP Endpoint"
+                placeholder="http://localhost:4318"
+                value={form.otelExporterOtlpEndpoint || ''}
+                helperText="Contoh: http://localhost:1234 atau http://<IP Server>:1234. Endpoint ini juga dipakai otel-gui (PORT) dan halaman Telemetry."
+                onChange={(e) =>
+                  handleChange('otelExporterOtlpEndpoint', e.target.value)
+                }
+              />
+            </Grid>
+          </Grid>
+        </Box>
+      </Box>
+
+      {/* ========================================================= */}
       {/* ================= CONNECTOR / BPOM CONFIG ============== */}
       {/* ========================================================= */}
       <Divider sx={{ mt: 2 }} />
@@ -542,82 +656,83 @@ function SettingScreen() {
         {/* ================= BPOM CONFIG =========================== */}
         {/* ========================================================= */}
         <Box mt={2}>
-        <Typography variant="h6" fontWeight="bold" mb={1.5}>
-          BPOM Config
-        </Typography>
-        <Box>
-          <Grid container spacing={1.5}>
-            <Grid size={4}>
-              <TextField
-                size="small"
-                select
-                fullWidth
-                label="Target"
-                value={
-                  form.bpomUrl || 'https://ttacdev.pom.go.id/dev/public/api/v3/'
-                }
-                onChange={(e) => handleChange('bpomUrl', e.target.value)}
-              >
-                {listBpomUrl.map((tz) => (
-                  <MenuItem key={tz.value} value={tz.value}>
-                    {tz.label}
-                  </MenuItem>
-                ))}
-              </TextField>
+          <Typography variant="h6" fontWeight="bold" mb={1.5}>
+            BPOM Config
+          </Typography>
+          <Box>
+            <Grid container spacing={1.5}>
+              <Grid size={4}>
+                <TextField
+                  size="small"
+                  select
+                  fullWidth
+                  label="Target"
+                  value={
+                    form.bpomUrl ||
+                    'https://ttacdev.pom.go.id/dev/public/api/v3/'
+                  }
+                  onChange={(e) => handleChange('bpomUrl', e.target.value)}
+                >
+                  {listBpomUrl.map((tz) => (
+                    <MenuItem key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid size={4}>
+                <TextField
+                  size="small"
+                  fullWidth
+                  label="BPOM Email"
+                  type="email"
+                  value={form.bpomEmail || ''}
+                  helperText="Tidak boleh menggunakan spasi"
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\s/g, '');
+                    handleChange('bpomEmail', value);
+                  }}
+                />
+              </Grid>
+              <Grid size={4}>
+                <TextField
+                  size="small"
+                  fullWidth
+                  type="password"
+                  label="BPOM Password"
+                  value={form.bpomPassword || ''}
+                  onChange={(e) => handleChange('bpomPassword', e.target.value)}
+                />
+              </Grid>
+              <Grid size={4}>
+                <TextField
+                  size="small"
+                  fullWidth
+                  label="BPOM App Name"
+                  value={form.bpomAppName || ''}
+                  helperText="Tidak boleh menggunakan spasi"
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\s/g, '');
+                    handleChange('bpomAppName', value);
+                  }}
+                />
+              </Grid>
+              <Grid size={4}>
+                <TextField
+                  size="small"
+                  fullWidth
+                  label="BPOM App Port"
+                  value={form.bpomAppPort || ''}
+                  helperText="Hanya angka"
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9]/g, '');
+                    handleChange('bpomAppPort', value);
+                  }}
+                />
+              </Grid>
             </Grid>
-            <Grid size={4}>
-              <TextField
-                size="small"
-                fullWidth
-                label="BPOM Email"
-                type="email"
-                value={form.bpomEmail || ''}
-                helperText="Tidak boleh menggunakan spasi"
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\s/g, '');
-                  handleChange('bpomEmail', value);
-                }}
-              />
-            </Grid>
-            <Grid size={4}>
-              <TextField
-                size="small"
-                fullWidth
-                type="password"
-                label="BPOM Password"
-                value={form.bpomPassword || ''}
-                onChange={(e) => handleChange('bpomPassword', e.target.value)}
-              />
-            </Grid>
-            <Grid size={4}>
-              <TextField
-                size="small"
-                fullWidth
-                label="BPOM App Name"
-                value={form.bpomAppName || ''}
-                helperText="Tidak boleh menggunakan spasi"
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\s/g, '');
-                  handleChange('bpomAppName', value);
-                }}
-              />
-            </Grid>
-            <Grid size={4}>
-              <TextField
-                size="small"
-                fullWidth
-                label="BPOM App Port"
-                value={form.bpomAppPort || ''}
-                helperText="Hanya angka"
-                onChange={(e) => {
-                  const value = e.target.value.replace(/[^0-9]/g, '');
-                  handleChange('bpomAppPort', value);
-                }}
-              />
-            </Grid>
-          </Grid>
+          </Box>
         </Box>
-      </Box>
       </Box>
       {/* ========================================================= */}
       {/* ================= ACTION ================================ */}
@@ -628,22 +743,11 @@ function SettingScreen() {
         </Button> */}
         <Button
           variant="contained"
-          onClick={async () => {
-            const ok = await showConfirm({
-              title: 'Save Settings',
-              message: 'Apakah anda yakin ingin menyimpan perubahan?',
-              severity: 'danger',
-            });
-            if (!ok) return;
-            // Kredensial sudah tersimpan: tidak perlu ditanya lagi.
-            if (hasGitAuth) {
-              handleSave();
-              return;
-            }
-            setOpenGitDialog(true);
-          }}
+          disabled={isLoading}
+          startIcon={isLoading ? <CircularProgress size={16} color="inherit" /> : null}
+          onClick={handleSaveWithGit}
         >
-          Save Settings
+          {isLoading ? 'Validating...' : 'Save Settings'}
         </Button>
       </Box>
     </Paper>

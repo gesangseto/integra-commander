@@ -52,6 +52,10 @@ import {
   gitVersionInfo,
 } from '../../utility/gitUtility';
 import useGitAuth from '../../utility/useGitAuth';
+import {
+  resolveTelemetryPort,
+  resolveTelemetryUrl,
+} from '../../utility/telemetryUtility';
 import { useAlert } from '../AlertProvider';
 import { useConfirm } from '../ConfirmProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
@@ -110,7 +114,6 @@ const TELEMETRY_LAYOUT_GIT_PATH = 'src/routes/+layout.svelte';
 const TELEMETRY_HEADER_REGEX =
   /[ \t]*<header class="app-header">[\s\S]*?<\/header>[ \t]*\r?\n?/;
 const TELEMETRY_PM2_NAME = 'telemetry';
-const TELEMETRY_PORT = 4318;
 // Versi Node.js minimum yang didukung otel-gui (package.json -> engines).
 const TELEMETRY_MIN_NODE = { major: 22, minor: 17 };
 
@@ -148,6 +151,9 @@ export default function TabPm2() {
   const setting = useSettingStore((state) => state.form);
   const isAdmin = useAppStatusStore((state) => state.isAdmin);
   const setIsAdmin = useAppStatusStore((state) => state.setIsAdmin);
+  const setTelemetryInstalled = useAppStatusStore(
+    (state) => state.setTelemetryInstalled,
+  );
   const deployInfo = useAppStore((state) => state.deployInfo);
   const setDeployInfo = useAppStore((state) => state.setDeployInfo);
 
@@ -278,6 +284,11 @@ export default function TabPm2() {
         });
 
         setPm2List(enrichedData);
+        // Sinkronkan status pemasangan plugin Telemetry ke SideBar: menu
+        // Telemetry hanya ditampilkan bila proses PM2 `telemetry` ada.
+        setTelemetryInstalled(
+          enrichedData.some((proc) => proc.name === 'telemetry'),
+        );
       }
     } catch (error) {
       const message = String(error);
@@ -570,6 +581,14 @@ export default function TabPm2() {
         await runCommand(['/C', 'npm', 'install', '--omit=dev'], serviceDir);
       }
       // =====================================================
+      // UPDATE FILE .ENV DI FOLDER SERVICES
+      // =====================================================
+      // `xcopy` hanya menyalin hasil build; file .env di folder services
+      // tidak ikut ter-update. Tulis ulang dari setting (replace/append)
+      // agar variabel terbaru — termasuk konfigurasi Telemetry — terpakai
+      // saat service dijalankan/di-reload.
+      await updateFileEnv(serviceDir);
+      // =====================================================
       // DEPLOY KE PM2
       // =====================================================
       await deployBackend(deploy_info);
@@ -628,6 +647,13 @@ export default function TabPm2() {
     }
 
     const telemetryDir = `${setting.workingDirectory}\\${TELEMETRY_DIR_PATH}`;
+    // Endpoint OTLP dari Setting → dipakai otel-gui untuk listen (PORT)
+    // dan menjadi URL halaman Telemetry.
+    const telemetryUrl = resolveTelemetryUrl(setting.otelExporterOtlpEndpoint);
+    const telemetryPort = resolveTelemetryPort(
+      setting.otelExporterOtlpEndpoint,
+    );
+    appendLog(`Telemetry endpoint: ${telemetryUrl} (PORT=${telemetryPort})`);
 
     // =====================================================
     // CEK VERSI NODE
@@ -772,7 +798,29 @@ export default function TabPm2() {
     // =====================================================
     // START PM2
     // =====================================================
+    // otel-gui dibangun dengan adapter-node: tanpa env `PORT` ia listen di
+    // 3000, bukan 4318. Nilai PORT ditulis eksplisit di file config PM2 agar
+    // PM2 selalu menjalankan service pada port endpoint dari Setting.
+    // Nama file harus memakai pola `.config.cjs` supaya dikenali PM2
+    // sebagai ecosystem/config file (bukan script aplikasi).
     appendLog('Starting telemetry service...');
+    const ecosystemPath = `${telemetryDir}\\.telemetry.config.cjs`;
+    const ecosystemConfig = `module.exports = {
+  apps: [
+    {
+      name: '${TELEMETRY_PM2_NAME}',
+      script: 'build/index.js',
+      cwd: __dirname,
+      env: {
+        PORT: '${telemetryPort}',
+      },
+    },
+  ],
+};
+`;
+    await writeTextFile(ecosystemPath, ecosystemConfig);
+    appendLog(`Telemetry PORT: ${telemetryPort} (ecosystem PM2)`);
+
     await Command.create(
       'run-command',
       ['/C', 'pm2', 'delete', TELEMETRY_PM2_NAME],
@@ -781,7 +829,7 @@ export default function TabPm2() {
       .execute()
       .catch(() => {});
     await runCommand(
-      ['/C', 'pm2', 'start', 'build/index.js', '--name', TELEMETRY_PM2_NAME],
+      ['/C', 'pm2', 'start', '.telemetry.config.cjs'],
       telemetryDir,
     );
     await Command.create('run-command', ['/C', 'pm2', 'save', '--force'], {
@@ -819,7 +867,7 @@ export default function TabPm2() {
       }
     }
 
-    appendLog(`Telemetry running at http://localhost:${TELEMETRY_PORT}`);
+    appendLog(`Telemetry running at ${telemetryUrl}`);
     fetchPm2List();
   };
 
@@ -1026,6 +1074,16 @@ export default function TabPm2() {
 
       CONNECTOR_BPOM: setting.bpomAppPort,
       CONNECTOR_BPOM_NAME: setting.bpomAppName,
+
+      // Telemetry / OpenTelemetry. Nilai di-replace bila key sudah ada,
+      // atau di-append bila belum ada (lihat setEnvValue).
+      TELEMETRY_ENABLED: setting.telemetryEnabled || 'true',
+      OTEL_SERVICE_NAME: setting.otelServiceName || 'mertrack-api',
+      OTEL_SERVICE_VERSION: setting.otelServiceVersion || '4.3.1',
+      OTEL_EXPORTER_OTLP_ENDPOINT:
+        setting.otelExporterOtlpEndpoint || 'http://localhost:4318',
+      OTEL_METRIC_EXPORT_INTERVAL:
+        setting.otelMetricExportInterval || '60000',
     };
 
     const envPath = `${path}\\.env`;

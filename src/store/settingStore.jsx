@@ -47,6 +47,15 @@ export const useSettingStore = create(
         bpomEmail: '',
         bpomPassword: '',
         bpomUrl: 'https://ttacdev.pom.go.id/dev/public/api/v3/',
+
+        // Konfigurasi OpenTelemetry. Nilai ini ditulis ke file `.env`
+        // (replace/append) saat deploy / Reload .env di TabPm2, lalu
+        // dipakai juga oleh halaman Telemetry (endpoint otel-gui).
+        telemetryEnabled: 'true',
+        otelServiceName: 'mertrack-api',
+        otelServiceVersion: '4.3.1',
+        otelExporterOtlpEndpoint: 'http://localhost:4318',
+        otelMetricExportInterval: '60000',
       },
 
       setForm: (data) =>
@@ -84,12 +93,26 @@ export const useSettingStore = create(
           bpomEmail: '',
           bpomPassword: '',
           bpomUrl: 'https://ttacdev.pom.go.id/dev/public/api/v3/',
+
+          telemetryEnabled: 'true',
+          otelServiceName: 'mertrack-api',
+          otelServiceVersion: '4.3.1',
+          otelExporterOtlpEndpoint: 'http://localhost:4318',
+          otelMetricExportInterval: '60000',
         };
         set({ form: defaultForm });
       },
     }),
     {
       name: 'setting-storage',
+      // Persisted state menimpa `form` secara shallow. Merge eksplisit
+      // diperlukan agar field baru (mis. konfigurasi Telemetry) tetap
+      // mendapat nilai default saat storage lama belum memilikinya.
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted || {}),
+        form: { ...current.form, ...((persisted && persisted.form) || {}) },
+      }),
       // Tambahkan logging untuk persist
       onRehydrateStorage: () => (state) => {},
     },

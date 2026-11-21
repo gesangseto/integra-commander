@@ -14,6 +14,7 @@ import HubIcon from '@mui/icons-material/Hub';
 import { useNavigate } from 'react-router-dom';
 import { useConfirm } from '../ConfirmProvider';
 import { DashboardOutlined } from '@mui/icons-material';
+import { useAppStatusStore } from '../../store/appStatusStore';
 
 let menu = [
   { id: 0, name: 'Dashboard', route: '/' },
@@ -45,6 +46,12 @@ export default function SideBar() {
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [activeMenu, setActiveMenu] = useState(0);
+
+  // Menu Telemetry hanya tampil setelah plugin Telemetry (proses PM2
+  // `telemetry`) terpasang. Statusnya di-update dari polling PM2 di TabPm2.
+  const telemetryInstalled = useAppStatusStore(
+    (state) => state.telemetryInstalled,
+  );
 
   useEffect(() => {
     formatDate();
@@ -117,15 +124,17 @@ export default function SideBar() {
             <DashboardOutlined fontSize="medium" />
           </Button>
         </Tooltip>
-        <Tooltip title="Telemetry">
-          <Button
-            aria-label="Telemetry"
-            sx={navButtonSx(activeMenu === 2)}
-            onClick={() => handleClickMenu(2)}
-          >
-            <HubIcon fontSize="medium" />
-          </Button>
-        </Tooltip>
+        {telemetryInstalled && (
+          <Tooltip title="Telemetry">
+            <Button
+              aria-label="Telemetry"
+              sx={navButtonSx(activeMenu === 2)}
+              onClick={() => handleClickMenu(2)}
+            >
+              <HubIcon fontSize="medium" />
+            </Button>
+          </Tooltip>
+        )}
       </Stack>
 
       <Stack spacing={1} mt="auto" alignItems="center">
