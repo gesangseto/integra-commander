@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   Paper,
@@ -134,6 +134,15 @@ function SettingScreen() {
   const resetStore = useSettingStore((state) => state.resetForm);
   // ================= LOCAL FORM =================
   const [form, setLocalForm] = useState(zustandForm);
+  const isSaving = useRef(false);
+
+  // Sinkronkan form lokal dari zustand setelah persist/rehydrasi agar nilai
+  // yang sudah disimpan (contoh bpomUrl live/development) tidak tertimpa
+  // nilai default awal saat layar dibuka ulang.
+  useEffect(() => {
+    if (isSaving.current) return;
+    setLocalForm(zustandForm);
+  }, [zustandForm]);
   const [gitForm, setGitForm] = useGitAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [openGitDialog, setOpenGitDialog] = useState(false);
@@ -223,8 +232,10 @@ function SettingScreen() {
 
   // ================= SAVE =================
   const handleSave = () => {
+    isSaving.current = true;
     resetStore(); // reset store sebelum menyimpan
     setForm(form); // simpan ke zustand
+    isSaving.current = false;
     showAlert('Saved successfully', 'success');
   };
 

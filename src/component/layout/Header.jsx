@@ -230,12 +230,55 @@ function Header() {
       showGlobalAlert('Password tidak boleh kosong.', 'warning');
       return;
     }
+    // Deteksi lokasi pm2.cmd secara dinamis jika belum tersimpan di store,
+    // supaya Setup Startup tetap bisa dijalankan walaupun deteksi awal gagal
+    // (walaupun pm2 sendiri sudah berjalan normal).
     if (!store.pm2Path) {
-      showGlobalAlert(
-        'Lokasi pm2.cmd belum terdeteksi. Buka tab versi terlebih dahulu, lalu coba lagi.',
-        'warning',
-      );
-      return;
+      let detectedPath = '';
+      // Coba 'where pm2.cmd' terlebih dahulu
+      try {
+        const pm2Where = await Command.create('run-command', [
+          '/C',
+          'where',
+          'pm2.cmd',
+        ]).execute();
+        detectedPath = (pm2Where.stdout || '')
+          .split('\n')
+          .map((s) => s.trim())
+          .find((s) => s.length > 0) || '';
+      } catch {
+        detectedPath = '';
+      }
+      // Jika belum ketemu, coba 'where pm2' (PATHEXT akan resolve ke pm2.cmd)
+      if (!detectedPath) {
+        try {
+          const pm2Where = await Command.create('run-command', [
+            '/C',
+            'where',
+            'pm2',
+          ]).execute();
+          detectedPath = (pm2Where.stdout || '')
+            .split('\n')
+            .map((s) => s.trim())
+            .find((s) => s.length > 0) || '';
+        } catch {
+          detectedPath = '';
+        }
+      }
+      // Jika masih belum ketemu, fallback ke 'pm2' langsung (bergantung PATH,
+      // yang sudah terbukti bekerja karena deteksi versi pm2 berhasil).
+      if (!detectedPath) {
+        detectedPath = 'pm2';
+      }
+      if (detectedPath) {
+        store.setPm2Path(detectedPath);
+      } else {
+        showGlobalAlert(
+          'Lokasi pm2.cmd belum terdeteksi. Buka tab versi terlebih dahulu, lalu coba lagi.',
+          'warning',
+        );
+        return;
+      }
     }
     setPasswordDialog(false);
     setSettingUp(true);
