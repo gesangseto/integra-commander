@@ -148,7 +148,6 @@ function SettingScreen() {
   const [openGitDialog, setOpenGitDialog] = useState(false);
   const gitAuth = useSettingStore((state) => state.gitAuth);
   const setGitAuth = useSettingStore((state) => state.setGitAuth);
-  const hasGitAuth = Boolean(gitAuth.username && gitAuth.password);
   // ================= AUTOSTART =================
   const [checked, setChecked] = useState(false);
   // ================= LOAD IP =================
@@ -646,11 +645,8 @@ function SettingScreen() {
               severity: 'danger',
             });
             if (!ok) return;
-            // Kredensial sudah tersimpan: tidak perlu ditanya lagi.
-            if (hasGitAuth) {
-              handleSave();
-              return;
-            }
+            // Selalu melalui dialog autentikasi Git seperti aksi lain (TabPm2),
+            // agar kredensial divalidasi dan tersimpan sebelum menyimpan pengaturan.
             setOpenGitDialog(true);
           }}
         >
