@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   Paper,
@@ -11,7 +11,6 @@ import {
   MenuItem,
   Switch,
   FormControlLabel,
-  CircularProgress,
 } from '@mui/material';
 
 import DialogGitAuthentication from '../component/DialogGitAuthentication';
@@ -135,12 +134,20 @@ function SettingScreen() {
   const resetStore = useSettingStore((state) => state.resetForm);
   // ================= LOCAL FORM =================
   const [form, setLocalForm] = useState(zustandForm);
+  const isSaving = useRef(false);
+
+  // Sinkronkan form lokal dari zustand setelah persist/rehydrasi agar nilai
+  // yang sudah disimpan (contoh bpomUrl live/development) tidak tertimpa
+  // nilai default awal saat layar dibuka ulang.
+  useEffect(() => {
+    if (isSaving.current) return;
+    setLocalForm(zustandForm);
+  }, [zustandForm]);
   const [gitForm, setGitForm] = useGitAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [openGitDialog, setOpenGitDialog] = useState(false);
   const gitAuth = useSettingStore((state) => state.gitAuth);
   const setGitAuth = useSettingStore((state) => state.setGitAuth);
-  const hasGitAuth = Boolean(gitAuth.username && gitAuth.password);
   // ================= AUTOSTART =================
   const [checked, setChecked] = useState(false);
   // ================= LOAD IP =================
@@ -224,38 +231,11 @@ function SettingScreen() {
 
   // ================= SAVE =================
   const handleSave = () => {
+    isSaving.current = true;
     resetStore(); // reset store sebelum menyimpan
     setForm(form); // simpan ke zustand
+    isSaving.current = false;
     showAlert('Saved successfully', 'success');
-  };
-
-  // Simpan perubahan HARUS melalui autentikasi Git: kredensial divalidasi
-  // (git ls-remote) lebih dulu. Bila belum ada / tidak valid, buka dialog
-  // Git agar user mengisi lalu menyimpan.
-  const handleSaveWithGit = async () => {
-    const ok = await showConfirm({
-      title: 'Save Settings',
-      message: 'Apakah anda yakin ingin menyimpan perubahan?',
-      severity: 'danger',
-    });
-    if (!ok) return;
-
-    // Belum ada kredensial tersimpan → minta lewat dialog Git.
-    if (!hasGitAuth) {
-      setOpenGitDialog(true);
-      return;
-    }
-
-    // Validasi kredensial Git yang tersimpan sebelum menyimpan perubahan.
-    setIsLoading(true);
-    const validasi = await gitValidation(gitAuth);
-    setIsLoading(false);
-    if (validasi.error) {
-      showAlert(validasi.message, 'error');
-      setOpenGitDialog(true);
-      return;
-    }
-    handleSave();
   };
 
   // ================= RESET =================
@@ -743,11 +723,19 @@ function SettingScreen() {
         </Button> */}
         <Button
           variant="contained"
-          disabled={isLoading}
-          startIcon={isLoading ? <CircularProgress size={16} color="inherit" /> : null}
-          onClick={handleSaveWithGit}
+          onClick={async () => {
+            const ok = await showConfirm({
+              title: 'Save Settings',
+              message: 'Apakah anda yakin ingin menyimpan perubahan?',
+              severity: 'danger',
+            });
+            if (!ok) return;
+            // Selalu melalui dialog autentikasi Git seperti aksi lain (TabPm2),
+            // agar kredensial divalidasi dan tersimpan sebelum menyimpan pengaturan.
+            setOpenGitDialog(true);
+          }}
         >
-          {isLoading ? 'Validating...' : 'Save Settings'}
+          Save Settings
         </Button>
       </Box>
     </Paper>
