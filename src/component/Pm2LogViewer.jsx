@@ -20,7 +20,7 @@ import { readDir, remove } from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
 
 import { gitValidation } from '../utility/gitUtility';
-import useGitAuth from '../utility/useGitAuth';
+import useGitAuthGate from '../utility/useGitAuthGate';
 import { useAlert } from './AlertProvider';
 import { useConfirm } from './ConfirmProvider';
 import DialogGitAuthentication from './DialogGitAuthentication';
@@ -84,9 +84,27 @@ export default function Pm2LogViewer({ open, onClose, process }) {
 
   // Log hasil rotasi (pm2-logrotate) milik proses yang sedang dibuka
   const [rotatedLogs, setRotatedLogs] = useState([]);
-  const [openGitDialog, setOpenGitDialog] = useState(false);
-  const [gitForm, setGitForm] = useGitAuth();
+  const {
+    open: openGitDialog,
+    setOpen: setOpenGitDialog,
+    gitForm,
+    setGitForm,
+    openGate,
+  } = useGitAuthGate(handleSubmit);
   const [isPurging, setIsPurging] = useState(false);
+
+  async function handleSubmit() {
+    setIsPurging(true);
+    // Validasi kredensial Git sebelum menghapus log
+    const validasi = await gitValidation(gitForm);
+    if (validasi.error) {
+      setIsPurging(false);
+      showAlert(validasi.message, 'error');
+      return;
+    }
+    setOpenGitDialog(false);
+    await purgeLogs();
+  }
 
   const bottomRef = useRef(null);
 
@@ -387,7 +405,7 @@ export default function Pm2LogViewer({ open, onClose, process }) {
                   severity: 'danger',
                 });
                 if (ok) {
-                  setOpenGitDialog(true);
+                  openGate();
                 }
               }}
             >
@@ -477,18 +495,7 @@ export default function Pm2LogViewer({ open, onClose, process }) {
         gitForm={gitForm}
         setGitForm={setGitForm}
         loading={isPurging}
-        onSubmit={async () => {
-          setIsPurging(true);
-          // Validasi kredensial Git sebelum menghapus log
-          const validasi = await gitValidation(gitForm);
-          if (validasi.error) {
-            setIsPurging(false);
-            showAlert(validasi.message, 'error');
-            return;
-          }
-          setOpenGitDialog(false);
-          await purgeLogs();
-        }}
+        onSubmit={handleSubmit}
       />
     </>
   );

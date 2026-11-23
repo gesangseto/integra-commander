@@ -51,7 +51,7 @@ import {
   gitValidation,
   gitVersionInfo,
 } from '../../utility/gitUtility';
-import useGitAuth from '../../utility/useGitAuth';
+import useGitAuthGate from '../../utility/useGitAuthGate';
 import {
   resolveTelemetryPort,
   resolveTelemetryUrl,
@@ -76,28 +76,31 @@ const DEPLOY_APPS = [
   {
     key: 'API_CORE',
     title: 'Api Core Mertrack',
-    description: 'Pull latest source & reload PM2',
+    description: 'Core system for the MERTRACK application.',
     git_url: 'https://gitlab.com/mertrack/mertrack-core',
     group: 'Service',
   },
   {
     key: 'API_BPOM',
     title: 'Connector BPOM',
-    description: 'Deploy BPOM API service',
+    description:
+      'BPOM Connector: Handles communication between MERTRACK and BPOM.',
     git_url: 'https://gitlab.com/gesang/connector-bpom',
     group: 'Service',
   },
   {
     key: 'telemetry',
     title: 'Telemetry',
-    description: 'Clone, build & jalankan otel-gui (OpenTelemetry viewer)',
+    description:
+      'Collects and transmits system metrics, performance data, and operational logs.',
     git_url: 'https://github.com/metafab/otel-gui',
     group: 'Plugin',
   },
   {
     key: 'logrotate',
     title: 'Logrotate',
-    description: 'Setup PM2 log rotation',
+    description:
+      'Manages automatic rotation, compression, and removal of system log files.',
     git_url: null,
     group: 'Plugin',
   },
@@ -144,9 +147,48 @@ export default function TabPm2() {
   const { showAlert } = useAlert();
   const { confirm: showConfirm } = useConfirm();
   const [isLoading, setIsLoading] = useState(false);
-  const [openGitDialog, setOpenGitDialog] = useState(false);
   const [selectedDeploy, setSelectedDeploy] = useState('');
-  const [gitForm, setGitForm] = useGitAuth();
+  const {
+    open: openGitDialog,
+    setOpen: setOpenGitDialog,
+    gitForm,
+    setGitForm,
+    openGate,
+  } = useGitAuthGate(handleSubmit);
+
+  // Satu handler untuk tombol dialog maupun eksekusi otomatis (saat kredensial
+  // tersimpan valid). Cabang ditentukan state terbaru (pendingReload/selectedDeploy).
+  async function handleSubmit() {
+    // Jalur Reload .env (memakai autentikasi Git seperti aksi lain)
+    if (pendingReload) {
+      setIsLoading(true);
+      const validasi = await gitValidation(gitForm);
+      setIsLoading(false);
+      if (validasi.error) {
+        showAlert(validasi.message, 'error');
+        return;
+      }
+      setOpenGitDialog(false);
+      await handleReloadEnv(reloadMode);
+      return;
+    }
+
+    if (!selectedDeploy) {
+      setIsLoading(true);
+      const validasi = await gitValidation(gitForm);
+      if (validasi.error) {
+        setIsLoading(false);
+        showAlert(validasi.message, 'error');
+        return;
+      }
+      setOpenGitDialog(false);
+      await handleSavePm2();
+      setIsLoading(false);
+      return;
+    }
+    setOpenGitDialog(false);
+    await handleDeploy(selectedDeploy, gitForm);
+  }
 
   const setting = useSettingStore((state) => state.form);
   const isAdmin = useAppStatusStore((state) => state.isAdmin);
@@ -434,7 +476,7 @@ export default function TabPm2() {
     setSelectedDeploy('');
     setPendingReload(true);
     setOpenReloadDialog(false);
-    setOpenGitDialog(true);
+    openGate();
   };
 
   /**
@@ -1082,8 +1124,7 @@ export default function TabPm2() {
       OTEL_SERVICE_VERSION: setting.otelServiceVersion || '4.3.1',
       OTEL_EXPORTER_OTLP_ENDPOINT:
         setting.otelExporterOtlpEndpoint || 'http://localhost:4318',
-      OTEL_METRIC_EXPORT_INTERVAL:
-        setting.otelMetricExportInterval || '60000',
+      OTEL_METRIC_EXPORT_INTERVAL: setting.otelMetricExportInterval || '60000',
     };
 
     const envPath = `${path}\\.env`;
@@ -1186,8 +1227,9 @@ export default function TabPm2() {
                 severity: 'danger',
               });
               if (ok) {
-                setOpenGitDialog(true);
                 setSelectedDeploy('');
+                setPendingReload(false);
+                openGate();
               }
             }}
           >
@@ -1453,7 +1495,7 @@ export default function TabPm2() {
                             app.key === 'API_BPOM'
                           ) {
                             setSelectedDeploy(app.key);
-                            setOpenGitDialog(true);
+                            openGate();
                           } else {
                             handleDeploy(app.key);
                           }
@@ -1522,37 +1564,7 @@ export default function TabPm2() {
         gitForm={gitForm}
         setGitForm={setGitForm}
         loading={deployLoading !== '' || isLoading}
-        onSubmit={async () => {
-          // Jalur Reload .env (memakai autentikasi Git seperti aksi lain)
-          if (pendingReload) {
-            setIsLoading(true);
-            const validasi = await gitValidation(gitForm);
-            setIsLoading(false);
-            if (validasi.error) {
-              showAlert(validasi.message, 'error');
-              return;
-            }
-            setOpenGitDialog(false);
-            await handleReloadEnv(reloadMode);
-            return;
-          }
-
-          if (!selectedDeploy) {
-            setIsLoading(true);
-            const validasi = await gitValidation(gitForm);
-            if (validasi.error) {
-              setIsLoading(false);
-              showAlert(validasi.message, 'error');
-              return;
-            }
-            setOpenGitDialog(false);
-            await handleSavePm2();
-            setIsLoading(false);
-            return;
-          }
-          setOpenGitDialog(false);
-          await handleDeploy(selectedDeploy, gitForm);
-        }}
+        onSubmit={handleSubmit}
       />
       <DialogVersionInfo
         open={Boolean(versionInfo)}

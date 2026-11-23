@@ -36,7 +36,7 @@ import DialogTailscaleAuthentication from '../DialogTailscaleAuthentication';
 import { useAppStore } from '../../store/pathStore';
 import { useAppStatusStore } from '../../store/appStatusStore';
 import { useSettingStore } from '../../store/settingStore';
-import { gitValidation } from '../../utility/gitUtility';
+import { gitValidation, isGitAuthReady } from '../../utility/gitUtility';
 import useGitAuth from '../../utility/useGitAuth';
 import useTailscaleAuth from '../../utility/useTailscaleAuth';
 import {
@@ -70,7 +70,8 @@ function Header() {
   const [gitForm, setGitForm] = useGitAuth();
   const [gitDialog, setGitDialog] = useState(false);
   const [savingGit, setSavingGit] = useState(false);
-  const hasGitAuth = Boolean(gitAuth.username && gitAuth.password);
+  // Valid = username & password terisi (sudah tervalidasi saat disimpan).
+  const hasGitAuth = isGitAuthReady(gitAuth);
 
   const handleSaveGitAuth = async () => {
     setSavingGit(true);
@@ -421,25 +422,25 @@ function Header() {
                     height: 34,
                     border: hasGitAuth
                       ? '1px solid #16a34a'
-                      : '1px dashed #94a3b8',
+                      : '1px solid #dc2626',
                     borderRadius: '10px',
-                    color: hasGitAuth ? '#16a34a' : '#ff9100',
+                    color: hasGitAuth ? '#16a34a' : '#dc2626',
                     backgroundColor: hasGitAuth
                       ? 'rgba(22,163,74,0.12)'
-                      : 'transparent',
+                      : 'rgba(220,38,38,0.12)',
                     '&:hover': {
                       backgroundColor: hasGitAuth
                         ? 'rgba(22,163,74,0.2)'
-                        : 'rgba(255,145,0,0.08)',
+                        : 'rgba(220,38,38,0.2)',
                     },
                   }}
                 >
                   {savingGit ? (
                     <CircularProgress size={14} color="inherit" />
                   ) : hasGitAuth ? (
-                    <LockIcon fontSize="small" />
-                  ) : (
                     <LockOpenIcon fontSize="small" />
+                  ) : (
+                    <LockIcon fontSize="small" />
                   )}
                 </IconButton>
               </Tooltip>

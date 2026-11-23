@@ -53,7 +53,7 @@ import { useAlert } from '../AlertProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
 import DialogVersionInfo from '../DialogVersionInfo';
 import { gitCloneFe, gitVersionInfo } from '../../utility/gitUtility';
-import useGitAuth from '../../utility/useGitAuth';
+import useGitAuthGate from '../../utility/useGitAuthGate';
 import { useConfirm } from '../ConfirmProvider';
 
 const DEPLOY_APPS = [
@@ -74,8 +74,18 @@ export default function TabNginx() {
     `${nginxPath}\\conf\\sites-enabled`,
   );
   const setting = useSettingStore((state) => state.form);
-  const [gitForm, setGitForm] = useGitAuth();
-  const [openGitDialog, setOpenGitDialog] = useState(false);
+  const {
+    open: openGitDialog,
+    setOpen: setOpenGitDialog,
+    gitForm,
+    setGitForm,
+    openGate,
+  } = useGitAuthGate(handleSubmit);
+
+  async function handleSubmit() {
+    setOpenGitDialog(false);
+    await handleDeploy(selectedDeploy, gitForm);
+  }
   const [selectedDeploy, setSelectedDeploy] = useState('');
   const [deletingConfig, setDeletingConfig] = useState('');
   const [versionInfo, setVersionInfo] = useState(null);
@@ -959,7 +969,7 @@ export default function TabNginx() {
                     disabled={deployLoading !== ''}
                     onClick={() => {
                       setSelectedDeploy(app.key);
-                      setOpenGitDialog(true);
+                      openGate();
                     }}
                   >
                     {deployLoading === app.key ? 'Processing...' : 'Execute'}
@@ -1018,10 +1028,7 @@ export default function TabNginx() {
         gitForm={gitForm}
         setGitForm={setGitForm}
         loading={deployLoading !== ''}
-        onSubmit={async () => {
-          setOpenGitDialog(false);
-          await handleDeploy(selectedDeploy, gitForm);
-        }}
+        onSubmit={handleSubmit}
       />
       <DialogVersionInfo
         open={Boolean(versionInfo)}

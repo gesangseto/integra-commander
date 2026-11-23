@@ -56,6 +56,16 @@ export async function gitValidation(options) {
   }
 }
 
+/**
+ * Kredensial Git siap dipakai otomatis (tanpa prompt) bila username & password
+ * yang tersimpan keduanya terisi. Data tersimpan sudah divalidasi ke server
+ * saat tombol simpan ditekan, jadi keberadaan kedua field = valid.
+ * Trim dipakai agar nilai spasi/kosong atau parsial dianggap belum valid.
+ */
+export function isGitAuthReady(gitAuth) {
+  return Boolean(gitAuth?.username?.trim() && gitAuth?.password?.trim());
+}
+
 export async function gitCloneFe(options) {
   const { username, password, branch, directory } = options;
   try {

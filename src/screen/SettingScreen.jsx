@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { Lock as LockIcon } from '@mui/icons-material';
 import {
   Paper,
   Typography,
@@ -18,7 +19,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 
 import { useSettingStore } from '../store/settingStore';
-import useGitAuth from '../utility/useGitAuth';
+import useGitAuthGate from '../utility/useGitAuthGate';
 import { useConfirm } from '../component/ConfirmProvider';
 import { useAlert } from '../component/AlertProvider';
 import { gitValidation } from '../utility/gitUtility';
@@ -143,11 +144,18 @@ function SettingScreen() {
     if (isSaving.current) return;
     setLocalForm(zustandForm);
   }, [zustandForm]);
-  const [gitForm, setGitForm] = useGitAuth();
-  const [isLoading, setIsLoading] = useState(false);
-  const [openGitDialog, setOpenGitDialog] = useState(false);
-  const gitAuth = useSettingStore((state) => state.gitAuth);
+  const {
+    open: openGitDialog,
+    setOpen: setOpenGitDialog,
+    gitForm,
+    setGitForm,
+  } = useGitAuthGate(handleUnlock);
   const setGitAuth = useSettingStore((state) => state.setGitAuth);
+  // ===== UNLOCK VIA GIT AUTH (saat membuka Setting) =====
+  // Selalu terkunci saat layar dibuka. Saat pindah menu, komponen di-unmount
+  // sehingga kembali ke Setting/Telemetry memerlukan git auth lagi.
+  const [settingUnlocked, setSettingUnlocked] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
   // ================= AUTOSTART =================
   const [checked, setChecked] = useState(false);
   // ================= LOAD IP =================
@@ -244,42 +252,42 @@ function SettingScreen() {
     setLocalForm(useSettingStore.getState().form);
   };
 
+  // Validasi kredensial Git untuk membuka (unblur) layar Setting.
+  async function handleUnlock() {
+    setIsUnlocking(true);
+    const validasi = await gitValidation(gitForm);
+    setIsUnlocking(false);
+    if (validasi.error) {
+      showAlert(validasi.message, 'error');
+      return;
+    }
+    setGitAuth(gitForm);
+    setSettingUnlocked(true);
+    setOpenGitDialog(false);
+    showAlert('Settings unlocked', 'success');
+  }
+
   return (
-    <Paper
-      elevation={0}
-      sx={{
-        height: '100%',
-        width: '100%',
-        p: 2.5,
-        boxSizing: 'border-box',
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        backgroundColor: '#ffffff',
-        border: '1px solid #e5e7eb',
-        borderRadius: 3,
-      }}
-    >
-      <DialogGitAuthentication
-        open={openGitDialog}
-        onClose={() => setOpenGitDialog(false)}
-        gitForm={gitForm}
-        setGitForm={setGitForm}
-        loading={isLoading}
-        onSubmit={async () => {
-          setIsLoading(true);
-          let validasi = await gitValidation(gitForm);
-          setIsLoading(false);
-          if (validasi.error) {
-            showAlert(validasi.message, 'error');
-            return;
-          }
-          // Simpan juga kredensialnya agar form lain auto-fill.
-          setGitAuth(gitForm);
-          handleSave();
-          setOpenGitDialog(false);
+    <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
+      <Paper
+        elevation={0}
+        sx={{
+          height: '100%',
+          width: '100%',
+          p: 2.5,
+          boxSizing: 'border-box',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          backgroundColor: '#ffffff',
+          border: '1px solid #e5e7eb',
+          borderRadius: 3,
+          filter: settingUnlocked ? 'none' : 'blur(8px)',
+          transition: 'filter .2s ease',
+          pointerEvents: settingUnlocked ? 'auto' : 'none',
+          userSelect: settingUnlocked ? 'auto' : 'none',
         }}
-      />
-      {/* ========================================================= */}
+      >
+        {/* ========================================================= */}
       {/* ================= APPLICATION =========================== */}
       {/* ========================================================= */}
       <Box mt={2}>
@@ -730,15 +738,62 @@ function SettingScreen() {
               severity: 'danger',
             });
             if (!ok) return;
-            // Selalu melalui dialog autentikasi Git seperti aksi lain (TabPm2),
-            // agar kredensial divalidasi dan tersimpan sebelum menyimpan pengaturan.
-            setOpenGitDialog(true);
+            // Layar sudah di-unlock via git auth saat dibuka → simpan langsung.
+            handleSave();
           }}
         >
           Save Settings
         </Button>
       </Box>
-    </Paper>
+      </Paper>
+
+      {!settingUnlocked && (
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'rgba(255,255,255,0.55)',
+            backdropFilter: 'blur(2px)',
+            borderRadius: 3,
+            p: 2,
+          }}
+        >
+          <Paper elevation={4} sx={{ p: 3, textAlign: 'center', maxWidth: 360 }}>
+            <LockIcon color="primary" sx={{ fontSize: 40 }} />
+            <Typography variant="h6" fontWeight="bold" mt={1}>
+              Setting terkunci
+            </Typography>
+            <Typography variant="body2" color="text.secondary" my={1.5}>
+              Autentikasi Git diperlukan untuk melihat / mengedit pengaturan.
+            </Typography>
+            <Button
+              variant="contained"
+              startIcon={<LockIcon />}
+              onClick={() => setOpenGitDialog(true)}
+            >
+              Unlock dengan Git Auth
+            </Button>
+          </Paper>
+        </Box>
+      )}
+
+      <DialogGitAuthentication
+        open={openGitDialog}
+        onClose={() => {
+          if (!isUnlocking) setOpenGitDialog(false);
+        }}
+        gitForm={gitForm}
+        setGitForm={setGitForm}
+        loading={isUnlocking}
+        title="Unlock Settings"
+        submitLabel="Unlock"
+        onSubmit={handleUnlock}
+      />
+    </Box>
   );
 }
 
