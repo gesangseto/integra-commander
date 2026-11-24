@@ -108,11 +108,20 @@ export const useSettingStore = create(
       // Persisted state menimpa `form` secara shallow. Merge eksplisit
       // diperlukan agar field baru (mis. konfigurasi Telemetry) tetap
       // mendapat nilai default saat storage lama belum memilikinya.
-      merge: (persisted, current) => ({
-        ...current,
-        ...(persisted || {}),
-        form: { ...current.form, ...((persisted && persisted.form) || {}) },
-      }),
+      merge: (persisted, current) => {
+        const persistedForm = (persisted && persisted.form) || {};
+        return {
+          ...current,
+          ...(persisted || {}),
+          form: {
+            ...current.form,
+            ...persistedForm,
+            // Nilai kosong lama (mis. bpomUrl '') tidak boleh menimpa default,
+            // agar BPOM_URL yang ditulis saat deploy tidak pernah kosong.
+            bpomUrl: persistedForm.bpomUrl || current.form.bpomUrl,
+          },
+        };
+      },
       // Tambahkan logging untuk persist
       onRehydrateStorage: () => (state) => {},
     },
