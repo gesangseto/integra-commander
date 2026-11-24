@@ -2,7 +2,7 @@ import { Box, ThemeProvider } from '@mui/material';
 import { invoke } from '@tauri-apps/api/core';
 import { Command } from '@tauri-apps/plugin-shell';
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import Footer from './component/layout/Footer';
 import Header from './component/layout/Header';
 import SideBar from './component/layout/SideBar';
@@ -85,14 +85,10 @@ function App() {
 }
 
 /**
- * Kerangka layout utama. Header & Footer disembunyikan pada halaman
- * Telemetry agar tampilan otel-gui (iframe) memakai area seluas mungkin
- * (maksimal). SideBar tetap tampil sebagai navigasi.
+ * Kerangka layout utama. Header & Footer selalu tampil sebagai satu kesatuan
+ * layout di semua halaman (termasuk Telemetry). SideBar tetap sebagai navigasi.
  */
 function AppLayout({ user }) {
-  const location = useLocation();
-  const isTelemetry = location.pathname === '/telemetry';
-
   return (
     <Box
       sx={{
@@ -120,11 +116,9 @@ function AppLayout({ user }) {
           boxSizing: 'border-box',
         }}
       >
-        {!isTelemetry && (
-          <Box sx={{ flexShrink: 0, zIndex: 2 }}>
-            <Header />
-          </Box>
-        )}
+        <Box sx={{ flexShrink: 0, zIndex: 2 }}>
+          <Header />
+        </Box>
 
         <Box
           sx={{
@@ -143,11 +137,9 @@ function AppLayout({ user }) {
           </ThemeProvider>
         </Box>
 
-        {!isTelemetry && (
-          <Box sx={{ flexShrink: 0 }}>
-            <Footer />
-          </Box>
-        )}
+        <Box sx={{ flexShrink: 0 }}>
+          <Footer />
+        </Box>
       </Box>
     </Box>
   );
