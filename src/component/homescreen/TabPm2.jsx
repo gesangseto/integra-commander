@@ -1221,7 +1221,7 @@ export default function TabPm2() {
                 p: 1,
                 border: 1,
                 borderColor: 'info.main',
-                borderRadius: 1,
+                borderRadius: 2,
                 color: 'info.main',
                 cursor: 'pointer',
                 '&:hover': { bgcolor: 'action.hover' },

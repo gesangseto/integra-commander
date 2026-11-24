@@ -24,7 +24,7 @@ const compactTheme = createTheme({
     text: { primary: '#0f172a', secondary: '#64748b', disabled: '#94a3b8' },
     divider: '#e5e7eb',
   },
-  shape: { borderRadius: 10 },
+  shape: { borderRadius: 2 },
   typography: {
     fontFamily:
       "'Inter Variable','Inter','Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif",
@@ -49,7 +49,7 @@ const compactTheme = createTheme({
     MuiButton: {
       defaultProps: { size: 'small', disableElevation: true },
       styleOverrides: {
-        root: { textTransform: 'none', borderRadius: 10, fontWeight: 600 },
+        root: { textTransform: 'none', borderRadius: '5px', fontWeight: 600 },
       },
     },
     MuiTextField: {
@@ -57,11 +57,11 @@ const compactTheme = createTheme({
     },
     MuiIconButton: {
       defaultProps: { size: 'small' },
-      styleOverrides: { root: { borderRadius: 10 } },
+      styleOverrides: { root: { borderRadius: '5px' } },
     },
     MuiChip: {
       defaultProps: { size: 'small' },
-      styleOverrides: { root: { borderRadius: 8, fontWeight: 600 } },
+      styleOverrides: { root: { borderRadius: 2, fontWeight: 600 } },
     },
     MuiTable: {
       defaultProps: { size: 'small' },
@@ -104,10 +104,10 @@ const compactTheme = createTheme({
       styleOverrides: { root: { minHeight: 38 } },
     },
     MuiLinearProgress: {
-      styleOverrides: { root: { height: 6, borderRadius: 3 } },
+      styleOverrides: { root: { height: 6, borderRadius: 2 } },
     },
     MuiDialog: {
-      styleOverrides: { paper: { borderRadius: 14 } },
+      styleOverrides: { paper: { borderRadius: 4 } },
     },
     MuiDialogTitle: {
       styleOverrides: {

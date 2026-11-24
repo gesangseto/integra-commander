@@ -281,7 +281,7 @@ function SettingScreen() {
           overflowX: 'hidden',
           backgroundColor: '#ffffff',
           border: '1px solid #e5e7eb',
-          borderRadius: 3,
+          borderRadius: 2,
           filter: settingUnlocked ? 'none' : 'blur(8px)',
           transition: 'filter .2s ease',
           pointerEvents: settingUnlocked ? 'auto' : 'none',
@@ -759,7 +759,7 @@ function SettingScreen() {
             justifyContent: 'center',
             bgcolor: 'rgba(255,255,255,0.55)',
             backdropFilter: 'blur(2px)',
-            borderRadius: 3,
+            borderRadius: 2,
             p: 2,
           }}
         >

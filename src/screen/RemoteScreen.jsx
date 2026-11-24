@@ -299,7 +299,7 @@ export default function RemoteScreen() {
         overflow: 'hidden',
         backgroundColor: '#ffffff',
         border: '1px solid #e5e7eb',
-        borderRadius: 3,
+        borderRadius: 2,
       }}
     >
       {/* ========================================================= */}

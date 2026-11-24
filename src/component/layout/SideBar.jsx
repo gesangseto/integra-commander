@@ -28,7 +28,7 @@ const navButtonSx = (active) => ({
   minWidth: 0,
   width: 52,
   height: 52,
-  borderRadius: '14px',
+  borderRadius: '5px',
   color: active ? '#2563eb' : '#cbd5e1',
   backgroundColor: active ? '#dbeafe' : 'transparent',
   border: '1px solid',
@@ -87,7 +87,7 @@ export default function SideBar() {
     <Box
       sx={{
         width: 96,
-        height: '99vh',
+        height: '98vh',
         bgcolor: '#070069',
         borderRight: '1px solid #070066',
         p: 1.5,
@@ -141,13 +141,7 @@ export default function SideBar() {
         <Tooltip title="Settings">
           <Button
             aria-label="Settings"
-            sx={{
-              ...navButtonSx(false),
-              backgroundColor: '#2563eb',
-              color: '#ffffff',
-              borderColor: '#2563eb',
-              '&:hover': { backgroundColor: '#1d4ed8', color: '#ffffff' },
-            }}
+            sx={navButtonSx(activeMenu === 1)}
             onClick={() => handleClickMenu(1)}
           >
             <SettingsIcon fontSize="medium" />

@@ -275,7 +275,7 @@ export default function Pm2LogViewer({ open, onClose, process }) {
         PaperProps={{
           sx: {
             height: '90vh',
-            borderRadius: 3,
+            borderRadius: 2,
             overflow: 'hidden',
           },
         }}

@@ -336,7 +336,7 @@ function Header() {
                 sx={{
                   minWidth: 300,
                   height: 38,
-                  borderRadius: '10px',
+                  borderRadius: '5px',
                   bgcolor: '#f8fafc',
                   border: '1px solid #e5e7eb',
                   px: 1.5,
@@ -423,7 +423,7 @@ function Header() {
                     border: hasGitAuth
                       ? '1px solid #16a34a'
                       : '1px solid #dc2626',
-                    borderRadius: '10px',
+                    borderRadius: '5px',
                     color: hasGitAuth ? '#16a34a' : '#dc2626',
                     backgroundColor: hasGitAuth
                       ? 'rgba(22,163,74,0.12)'
@@ -460,7 +460,7 @@ function Header() {
                     border: hasTailscaleAuth
                       ? '1px solid #7c3aed'
                       : '1px dashed #94a3b8',
-                    borderRadius: '10px',
+                    borderRadius: '5px',
                     color: hasTailscaleAuth ? '#7c3aed' : '#ff9100',
                     backgroundColor: hasTailscaleAuth
                       ? 'rgba(124,58,237,0.12)'
@@ -494,7 +494,7 @@ function Header() {
                 sx={{
                   px: 1.5,
                   py: 0.5,
-                  borderRadius: '10px',
+                  borderRadius: '5px',
                   fontSize: 12.5,
                   color: '#ff9100',
                   borderColor: '#ff9100',

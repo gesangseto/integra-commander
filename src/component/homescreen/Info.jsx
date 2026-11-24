@@ -105,7 +105,7 @@ export default function Info() {
         border: '1px solid #424242',
         px: 2.5,
         py: 2,
-        borderRadius: 3,
+        borderRadius: 2,
       }}
     >
       <Grid container spacing={2}>
@@ -244,7 +244,7 @@ const ResourceItemPercent = ({ label, value = 0, color }) => {
         value={Math.min(percent, 100)}
         sx={{
           height: 6,
-          borderRadius: 5,
+          borderRadius: 2,
           bgcolor: '#414141',
           '& .MuiLinearProgress-bar': {
             bgcolor: color,
@@ -287,7 +287,7 @@ const ResourceItemMemory = ({ label, value = 0, totalMB = 0, color }) => {
         value={Math.min(percent, 100)}
         sx={{
           height: 6,
-          borderRadius: 5,
+          borderRadius: 2,
           bgcolor: '#414141',
           '& .MuiLinearProgress-bar': {
             bgcolor: color,

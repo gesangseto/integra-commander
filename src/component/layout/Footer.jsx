@@ -5,7 +5,7 @@ function Footer() {
     <Paper
       elevation={0}
       sx={{
-        borderRadius: 3,
+        borderRadius: 2,
         px: 2,
         py: 0.75,
         border: '1px solid #182136',
