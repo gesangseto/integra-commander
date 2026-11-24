@@ -52,7 +52,7 @@ import { getNginxStatus, openLocation } from '../../utility';
 import { useAlert } from '../AlertProvider';
 import DialogGitAuthentication from '../DialogGitAuthentication';
 import DialogVersionInfo from '../DialogVersionInfo';
-import { gitCloneFe, gitVersionInfo } from '../../utility/gitUtility';
+import { gitCloneFe, gitVersionInfo, gitValidation } from '../../utility/gitUtility';
 import useGitAuthGate from '../../utility/useGitAuthGate';
 import { useConfirm } from '../ConfirmProvider';
 
@@ -74,6 +74,7 @@ export default function TabNginx() {
     `${nginxPath}\\conf\\sites-enabled`,
   );
   const setting = useSettingStore((state) => state.form);
+  const setGitAuth = useSettingStore((state) => state.setGitAuth);
   const {
     open: openGitDialog,
     setOpen: setOpenGitDialog,
@@ -81,8 +82,18 @@ export default function TabNginx() {
     setGitForm,
     openGate,
   } = useGitAuthGate(handleSubmit);
+  const [isSavingGit, setIsSavingGit] = useState(false);
 
   async function handleSubmit() {
+    setIsSavingGit(true);
+    const validasi = await gitValidation(gitForm);
+    setIsSavingGit(false);
+    if (validasi.error) {
+      showAlert(validasi.message, 'error');
+      return;
+    }
+    // Simpan kredensial agar aksi berikutnya auto-run (gate "ingat").
+    setGitAuth(gitForm);
     setOpenGitDialog(false);
     await handleDeploy(selectedDeploy, gitForm);
   }
@@ -1027,7 +1038,7 @@ export default function TabNginx() {
         onClose={() => setOpenGitDialog(false)}
         gitForm={gitForm}
         setGitForm={setGitForm}
-        loading={deployLoading !== ''}
+        loading={deployLoading !== '' || isSavingGit}
         onSubmit={handleSubmit}
       />
       <DialogVersionInfo

@@ -21,6 +21,7 @@ import { Command } from '@tauri-apps/plugin-shell';
 
 import { gitValidation } from '../utility/gitUtility';
 import useGitAuthGate from '../utility/useGitAuthGate';
+import { useSettingStore } from '../store/settingStore';
 import { useAlert } from './AlertProvider';
 import { useConfirm } from './ConfirmProvider';
 import DialogGitAuthentication from './DialogGitAuthentication';
@@ -77,6 +78,7 @@ function getLogBaseName(proc) {
 export default function Pm2LogViewer({ open, onClose, process }) {
   const { showAlert } = useAlert();
   const { confirm: showConfirm } = useConfirm();
+  const setGitAuth = useSettingStore((state) => state.setGitAuth);
 
   const [logs, setLogs] = useState([]);
   const [search, setSearch] = useState('');
@@ -102,6 +104,8 @@ export default function Pm2LogViewer({ open, onClose, process }) {
       showAlert(validasi.message, 'error');
       return;
     }
+    // Simpan kredensial agar aksi berikutnya auto-run (gate "ingat").
+    setGitAuth(gitForm);
     setOpenGitDialog(false);
     await purgeLogs();
   }

@@ -145,6 +145,7 @@ function SettingScreen() {
     setLocalForm(zustandForm);
   }, [zustandForm]);
   const {
+    ready: gitAuthReady,
     open: openGitDialog,
     setOpen: setOpenGitDialog,
     gitForm,
@@ -152,9 +153,9 @@ function SettingScreen() {
   } = useGitAuthGate(handleUnlock);
   const setGitAuth = useSettingStore((state) => state.setGitAuth);
   // ===== UNLOCK VIA GIT AUTH (saat membuka Setting) =====
-  // Selalu terkunci saat layar dibuka. Saat pindah menu, komponen di-unmount
-  // sehingga kembali ke Setting/Telemetry memerlukan git auth lagi.
-  const [settingUnlocked, setSettingUnlocked] = useState(false);
+  // Bila kredensial Git tersimpan & valid → langsung terbuka tanpa prompt.
+  // Jika belum → layar di-blur dan wajib unlock via git auth (lalu tersimpan).
+  const [settingUnlocked, setSettingUnlocked] = useState(gitAuthReady);
   const [isUnlocking, setIsUnlocking] = useState(false);
   // ================= AUTOSTART =================
   const [checked, setChecked] = useState(false);

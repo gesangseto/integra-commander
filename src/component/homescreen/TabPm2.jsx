@@ -168,6 +168,8 @@ export default function TabPm2() {
         showAlert(validasi.message, 'error');
         return;
       }
+      // Simpan kredensial agar aksi berikutnya auto-run (gate "ingat").
+      setGitAuth(gitForm);
       setOpenGitDialog(false);
       await handleReloadEnv(reloadMode);
       return;
@@ -181,16 +183,27 @@ export default function TabPm2() {
         showAlert(validasi.message, 'error');
         return;
       }
+      setIsLoading(false);
+      setGitAuth(gitForm);
       setOpenGitDialog(false);
       await handleSavePm2();
-      setIsLoading(false);
       return;
     }
+
+    setIsLoading(true);
+    const validasi = await gitValidation(gitForm);
+    setIsLoading(false);
+    if (validasi.error) {
+      showAlert(validasi.message, 'error');
+      return;
+    }
+    setGitAuth(gitForm);
     setOpenGitDialog(false);
     await handleDeploy(selectedDeploy, gitForm);
   }
 
   const setting = useSettingStore((state) => state.form);
+  const setGitAuth = useSettingStore((state) => state.setGitAuth);
   const isAdmin = useAppStatusStore((state) => state.isAdmin);
   const setIsAdmin = useAppStatusStore((state) => state.setIsAdmin);
   const setTelemetryInstalled = useAppStatusStore(

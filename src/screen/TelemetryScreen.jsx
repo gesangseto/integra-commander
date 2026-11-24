@@ -44,15 +44,16 @@ export default function TelemetryScreen() {
   // ===== UNLOCK VIA GIT AUTH =====
   const { showAlert } = useAlert();
   const {
+    ready: gitAuthReady,
     open: openGitDialog,
     setOpen: setOpenGitDialog,
     gitForm,
     setGitForm,
   } = useGitAuthGate(handleUnlock);
   const setGitAuth = useSettingStore((state) => state.setGitAuth);
-  // Selalu terkunci saat layar dibuka. Saat pindah menu, komponen di-unmount
-  // sehingga kembali ke Telemetry/Setting memerlukan git auth lagi.
-  const [telemetryUnlocked, setTelemetryUnlocked] = useState(false);
+  // Bila kredensial Git tersimpan & valid → langsung terbuka tanpa prompt.
+  // Jika belum → layar di-blur dan wajib unlock via git auth (lalu tersimpan).
+  const [telemetryUnlocked, setTelemetryUnlocked] = useState(gitAuthReady);
   const [isUnlocking, setIsUnlocking] = useState(false);
 
   const endpoint = useSettingStore(
